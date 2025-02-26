@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Copy, Clone, Serialize, Deserialize)]
 pub struct Point {
     pub id: u64,
     pub x: f32,
@@ -20,11 +20,11 @@ pub struct PolygonLine {
     point2: PolygonNode,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct Polygon {
-    k: u64,                  // Number of polygon nodes - körbeírandó poligon fokszáma
-    nodes: Vec<PolygonNode>, // Polygon nodes - poligon csúcsai
-    lines: Vec<PolygonLine>, // Polygon lines - poligon határvonalai
+    pub k: u64,                  // Number of polygon nodes - körbeírandó poligon fokszáma
+    pub nodes: Vec<PolygonNode>, // Polygon nodes - poligon csúcsai
+    pub lines: Vec<PolygonLine>, // Polygon lines - poligon határvonalai
 }
 
 pub fn hill_climbing() {}
