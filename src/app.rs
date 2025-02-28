@@ -69,7 +69,6 @@ impl eframe::App for TemplateApp {
                 if ui.button("Generate").clicked() {
                     self.points = setupPoints(self.n_o_points);
                     self.polygon = setupPolygon(self.n_o_nodes);
-                    self.polygon.nodes[0] = Point {x: self.polygon.nodes[0].x - 0.2, y: self.polygon.nodes[0].y};
                 }
                 if ui.button("Start").clicked() {}
                 if ui.button("Next generation").clicked() {}
