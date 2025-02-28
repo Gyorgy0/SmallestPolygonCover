@@ -1,9 +1,9 @@
 use std::ops::RangeInclusive;
 
-use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Visuals, Widget};
+use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Vec2, Visuals, Widget};
 use egui_plot::{Legend, Line, PlotPoints};
 
-use crate::simulation::{setupPoints, Point, Polygon};
+use crate::simulation::{setupPoints, setupPolygon, Point, Polygon};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -68,6 +68,8 @@ impl eframe::App for TemplateApp {
                 egui::Slider::new(&mut self.n_o_nodes, RangeInclusive::new(3, 255)).ui(ui);
                 if ui.button("Generate").clicked() {
                     self.points = setupPoints(self.n_o_points);
+                    self.polygon = setupPolygon(self.n_o_nodes);
+                    self.polygon.nodes[0] = Point {x: self.polygon.nodes[0].x - 0.2, y: self.polygon.nodes[0].y};
                 }
                 if ui.button("Start").clicked() {}
                 if ui.button("Next generation").clicked() {}
@@ -89,7 +91,13 @@ impl eframe::App for TemplateApp {
 }
 
 fn display_contents(app: &mut TemplateApp, ctx: &egui::Context, ui: &mut Ui) {
+    // Radius of the circle covered, by the window
     let mut radius = 0_f32;
+    //Center of the window
+    let mut center: Pos2 = Pos2::new(
+        ctx.screen_rect().width() / 2.0,
+        ctx.screen_rect().height() / 2.0,
+    );
     if ctx.screen_rect().height() < ctx.screen_rect().width() {
         radius = ctx.screen_rect().height() / 2.0;
     } else {
@@ -101,14 +109,26 @@ fn display_contents(app: &mut TemplateApp, ctx: &egui::Context, ui: &mut Ui) {
             ctx.screen_rect().height() / 2.0,
         ),
         radius,
-        Color32::from_rgba_unmultiplied(0, 0, 0, 10),
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(0, 0, 0, 0)),
+        Color32::from_rgba_unmultiplied(0, 0, 0, 0),
+        Stroke::new(15.0, Color32::from_rgba_unmultiplied(255, 0, 0, 50)),
     );
+    // Displaying points
     for i in 0..app.points.len() {
-        ui.painter().circle(Pos2::new(
-            (ctx.screen_rect().width() / 2.0) + ((radius/3.0) * app.points[i].x),
-            (ctx.screen_rect().height() / 2.0) + ((radius/3.0) * app.points[i].y),
-        ), 5.0, Color32::BLACK, Stroke::new(1.0, Color32::BLACK));
-        println!("{}" ,app.points[i].x);
+        ui.painter().circle(
+            Pos2::new(
+                (ctx.screen_rect().width() / 2.0) + ((radius / 2.0) * app.points[i].x),
+                (ctx.screen_rect().height() / 2.0) + ((radius / 2.0) * app.points[i].y),
+            ),
+            5.0,
+            Color32::BLACK,
+            Stroke::new(1.0, Color32::BLACK),
+        );
     }
+    // Displaying the polygon
+    let mut points:Vec<Pos2> = vec![Pos2::default(); app.polygon.lines.len()+1];
+    for i in 0..app.polygon.nodes.len() {
+        points[i] = Pos2::new(center.x + radius*app.polygon.nodes[i].x, center.y + radius*app.polygon.nodes[i].y);
+    }
+    points[app.polygon.nodes.len()] = Pos2::new(center.x + radius*app.polygon.nodes[0].x, center.y + radius*app.polygon.nodes[0].y);
+    ui.painter().line(points, Stroke::new(5.0, Color32::RED));
 }
