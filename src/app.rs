@@ -1,9 +1,9 @@
 use std::ops::RangeInclusive;
 
-use egui::{self, CentralPanel, Color32, Pos2, Stroke, Visuals, Widget};
+use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Visuals, Widget};
 use egui_plot::{Legend, Line, PlotPoints};
 
-use crate::simulation::{Point, Polygon};
+use crate::simulation::{setupPoints, Point, Polygon};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -66,24 +66,13 @@ impl eframe::App for TemplateApp {
                 egui::Slider::new(&mut self.n_o_points, RangeInclusive::new(0, 255)).ui(ui);
                 ui.label("Number of nodes (csúcsok száma):");
                 egui::Slider::new(&mut self.n_o_nodes, RangeInclusive::new(3, 255)).ui(ui);
+                if ui.button("Generate").clicked() {
+                    self.points = setupPoints(self.n_o_points);
+                }
                 if ui.button("Start").clicked() {}
                 if ui.button("Next generation").clicked() {}
             });
-            let mut radius = 0_f32;
-            if ctx.screen_rect().height() < ctx.screen_rect().width() {
-                radius = ctx.screen_rect().height() / 2.0;
-            } else {
-                radius = ctx.screen_rect().width() / 2.0;
-            }
-            ui.painter().circle(
-                Pos2::new(
-                    ctx.screen_rect().width() / 2.0,
-                    ctx.screen_rect().height() / 2.0,
-                ),
-                radius,
-                Color32::from_rgba_unmultiplied(0, 0, 0, 10),
-                Stroke::new(1.0, Color32::from_rgba_unmultiplied(0,0,0,0)),
-            );
+            display_contents(self, ctx, ui);
             /*egui::Window::new("Graph").show(ctx, |ui| {
                 egui_plot::Plot::new("Plot")
                     .allow_zoom(true)
@@ -94,6 +83,32 @@ impl eframe::App for TemplateApp {
                         plot_ui.line(Line::new(points));
                     });
             });*/
+            ctx.request_repaint();
         });
+    }
+}
+
+fn display_contents(app: &mut TemplateApp, ctx: &egui::Context, ui: &mut Ui) {
+    let mut radius = 0_f32;
+    if ctx.screen_rect().height() < ctx.screen_rect().width() {
+        radius = ctx.screen_rect().height() / 2.0;
+    } else {
+        radius = ctx.screen_rect().width() / 2.0;
+    }
+    ui.painter().circle(
+        Pos2::new(
+            ctx.screen_rect().width() / 2.0,
+            ctx.screen_rect().height() / 2.0,
+        ),
+        radius,
+        Color32::from_rgba_unmultiplied(0, 0, 0, 10),
+        Stroke::new(1.0, Color32::from_rgba_unmultiplied(0, 0, 0, 0)),
+    );
+    for i in 0..app.points.len() {
+        ui.painter().circle(Pos2::new(
+            (ctx.screen_rect().width() / 2.0) + ((radius/3.0) * app.points[i].x),
+            (ctx.screen_rect().height() / 2.0) + ((radius/3.0) * app.points[i].y),
+        ), 5.0, Color32::BLACK, Stroke::new(1.0, Color32::BLACK));
+        println!("{}" ,app.points[i].x);
     }
 }
