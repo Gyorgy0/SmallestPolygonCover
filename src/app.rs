@@ -1,9 +1,11 @@
-use std::ops::{Not, RangeInclusive};
+use std::{default, ops::RangeInclusive};
 
 use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Vec2, Visuals, Widget};
 use egui_plot::{Legend, Line, PlotPoints};
 
-use crate::simulation::{setupPoints, setupPolygon, Point, Polygon};
+use crate::simulation::{
+    points_are_in_bounds, setup_points, setup_polygon, steepest_ascent, Point, Polygon,
+};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -16,7 +18,6 @@ pub struct TemplateApp {
     n_o_nodes: u8,
     circumference: f32,
     stepsize: f32,
-    fitness: f32,
     started: bool,
 }
 
@@ -30,7 +31,6 @@ impl Default for TemplateApp {
             n_o_nodes: 3,
             circumference: 0_f32,
             stepsize: 0.01,
-            fitness: 0_f32,
             started: false,
         }
     }
@@ -76,8 +76,11 @@ impl eframe::App for TemplateApp {
                     ui.label("Step size (lépés nagysága):");
                     egui::Slider::new(&mut self.stepsize, RangeInclusive::new(0_f32, 1_f32)).ui(ui);
                     if ui.button("Generate").clicked() {
-                        self.points = setupPoints(self.n_o_points);
-                        self.polygon = setupPolygon(self.n_o_nodes);
+                        self.started = false;
+                        self.points = setup_points(self.n_o_points);
+                        self.polygon = setup_polygon(self.n_o_nodes);
+                        self.generation = 0_u64;
+                        self.circumference = 0_f32;
                     }
                 });
                 if !self.started {
@@ -89,7 +92,19 @@ impl eframe::App for TemplateApp {
                         self.started = false;
                     }
                 }
-                if ui.button("Next generation").clicked() {}
+
+                if ui.button("Next generation").clicked() {
+                    //while !points_are_in_bounds(&self.points, &self.polygon) {
+                        self.polygon = steepest_ascent(
+                            &self.points,
+                            self.polygon.clone(),
+                            self.stepsize,
+                            &mut self.generation,
+                            &mut self.circumference,
+                        );
+                    //}
+                    println!("{}", self.generation);
+                }
                 if ui.button("Reset").clicked() {
                     *self = Self::default();
                 }
@@ -101,9 +116,9 @@ impl eframe::App for TemplateApp {
 }
 
 fn display_contents(app: &mut TemplateApp, ctx: &egui::Context, ui: &mut Ui) {
-    // Radius of the circle covered, by the window
-    let mut radius = 0_f32;
-    //Center of the window
+    // Radius of the circle covered, by the window - Az ablak belülírt körének sugara
+    let mut radius: f32 = 0_f32;
+    // Center of the window - Az ablak közepe
     let center: Pos2 = Pos2::new(
         ctx.screen_rect().width() / 2.0,
         ctx.screen_rect().height() / 2.0,
@@ -122,28 +137,28 @@ fn display_contents(app: &mut TemplateApp, ctx: &egui::Context, ui: &mut Ui) {
         Color32::from_rgba_unmultiplied(0, 0, 0, 0),
         Stroke::new(15.0, Color32::from_rgba_unmultiplied(255, 0, 0, 50)),
     );
-    // Displaying points
+    // Displaying points - Pontok megjelenítése
     for i in 0..app.points.len() {
         ui.painter().circle(
             Pos2::new(
-                (ctx.screen_rect().width() / 2.0) + ((radius / 2.0) * app.points[i].x),
-                (ctx.screen_rect().height() / 2.0) + ((radius / 2.0) * app.points[i].y),
+                (ctx.screen_rect().width() / 2.0) + (radius * app.points[i].x),
+                (ctx.screen_rect().height() / 2.0) + (radius * app.points[i].y),
             ),
             1.0,
             Color32::from_rgba_unmultiplied(0, 0, 0, 10),
             Stroke::new(1.0, Color32::BLACK),
         );
     }
-    // Displaying the polygon
+    // Displaying the polygon - Poligon megjelenítése
     let mut points: Vec<Pos2> = vec![];
-    for i in 0..app.polygon.lines.len() {
+    for i in 0..app.polygon.nodes.len() {
         points.push(Pos2::new(
-            center.x + radius * app.polygon.lines[i].point1.x,
-            center.y + radius * app.polygon.lines[i].point1.y,
+            center.x + (radius * app.polygon.nodes[i].x),
+            center.y + (radius * app.polygon.nodes[i].y),
         ));
         points.push(Pos2::new(
-            center.x + radius * app.polygon.lines[i].point2.x,
-            center.y + radius * app.polygon.lines[i].point2.y,
+            center.x + (radius * app.polygon.nodes[(i + 1) % app.polygon.nodes.len()].x),
+            center.y + (radius * app.polygon.nodes[(i + 1) % app.polygon.nodes.len()].y),
         ));
     }
     ui.painter().line(points, Stroke::new(5.0, Color32::RED));
