@@ -83,26 +83,25 @@ pub fn steepest_ascent(
     generation: &mut u64,
     circumference: &mut f32,
 ) -> Polygon {
-    let mut new_nodes = vec![Point::default(); polygon.nodes.len()];
     let mut rnd = rand::rng();
     let mut actual_circumference = 0_f32;
     let n_o_nodes = polygon.nodes.len();
     for i in 0..n_o_nodes {
-        let mut new_x = 0_f32;
-        let mut new_y = 0_f32;
-        new_x = rnd.random_range(-stepsize..=stepsize);
-        new_y = rnd.random_range(-stepsize..=stepsize);
-        if new_x.powi(2) > stepsize.powi(2) - new_y.powi(2) {
-            let radius = stepsize.powi(2) - new_y.powi(2);
-            new_x = rnd.random_range(-radius..radius);
-        } else if (new_y.powi(2) > stepsize.powi(2) - new_x.powi(2)) {
-            let radius = stepsize.powi(2) - new_x.powi(2);
-            new_y = rnd.random_range(-radius..radius);
+        let original_point = polygon.nodes[i];
+        let mut new_x_diff = 0_f32;
+        let mut new_y_diff = 0_f32;
+        new_x_diff = rnd.random_range(-stepsize..=stepsize);
+        new_y_diff = rnd.random_range(-stepsize..=stepsize);
+        polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
+        if !points_are_in_bounds(points, &polygon) {
+            polygon.nodes[i] = original_point;
         }
-        polygon.nodes[i] = Point::new(new_x, new_y);
         for i in 0..n_o_nodes {
             actual_circumference +=
                 calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
+        }
+        if actual_circumference > *circumference {
+            polygon.nodes[i] = original_point;
         }
     }
     *circumference = actual_circumference;

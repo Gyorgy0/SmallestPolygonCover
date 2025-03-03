@@ -10,7 +10,7 @@ use crate::simulation::{
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
+pub struct SmallestPolygonCoverApp {
     generation: u64,
     points: Vec<Point>,
     polygon: Polygon,
@@ -21,7 +21,7 @@ pub struct TemplateApp {
     started: bool,
 }
 
-impl Default for TemplateApp {
+impl Default for SmallestPolygonCoverApp {
     fn default() -> Self {
         Self {
             generation: 0,
@@ -36,7 +36,7 @@ impl Default for TemplateApp {
     }
 }
 
-impl TemplateApp {
+impl SmallestPolygonCoverApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -52,7 +52,7 @@ impl TemplateApp {
     }
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for SmallestPolygonCoverApp {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
@@ -94,16 +94,15 @@ impl eframe::App for TemplateApp {
                 }
 
                 if ui.button("Next generation").clicked() {
-                    //while !points_are_in_bounds(&self.points, &self.polygon) {
-                        self.polygon = steepest_ascent(
-                            &self.points,
-                            self.polygon.clone(),
-                            self.stepsize,
-                            &mut self.generation,
-                            &mut self.circumference,
-                        );
-                    //}
+                    self.polygon = steepest_ascent(
+                        &self.points,
+                        self.polygon.clone(),
+                        self.stepsize,
+                        &mut self.generation,
+                        &mut self.circumference,
+                    );
                     println!("{}", self.generation);
+                    println!("{}", self.circumference);
                 }
                 if ui.button("Reset").clicked() {
                     *self = Self::default();
@@ -115,7 +114,7 @@ impl eframe::App for TemplateApp {
     }
 }
 
-fn display_contents(app: &mut TemplateApp, ctx: &egui::Context, ui: &mut Ui) {
+fn display_contents(app: &mut SmallestPolygonCoverApp, ctx: &egui::Context, ui: &mut Ui) {
     // Radius of the circle covered, by the window - Az ablak belülírt körének sugara
     let mut radius: f32 = 0_f32;
     // Center of the window - Az ablak közepe
