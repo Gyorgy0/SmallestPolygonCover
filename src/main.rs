@@ -40,7 +40,7 @@ fn main() {
             .expect("No document");
 
         let canvas = document
-            .get_element_by_id("the_canvas_id")
+            .get_element_by_id("glcanvas")
             .expect("Failed to find the_canvas_id")
             .dyn_into::<web_sys::HtmlCanvasElement>()
             .expect("the_canvas_id was not a HtmlCanvasElement");
@@ -56,8 +56,8 @@ fn main() {
                 }),
             )
             .await;
-
-        // Remove the loading text and spinner:
+        // LOADING SCREEN NOT YET IMPLEMENTED
+        /*// Remove the loading text and spinner:
         if let Some(loading_text) = document.get_element_by_id("loading_text") {
             match start_result {
                 Ok(_) => {
@@ -70,6 +70,6 @@ fn main() {
                     panic!("Failed to start eframe: {e:?}");
                 }
             }
-        }
+        }*/
     });
 }
