@@ -11,25 +11,27 @@ use crate::simulation::{
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct SmallestPolygonCoverApp {
-    generation: u64,
+    #[serde(skip)]
     points: Vec<Point>,
+    #[serde(skip)]
     polygon: Polygon,
     n_o_points: u8,
     n_o_nodes: u8,
-    circumference: f32,
+    #[serde(skip)]
+    circumference: Vec<f32>,
     stepsize: f32,
+    #[serde(skip)]
     started: bool,
 }
 
 impl Default for SmallestPolygonCoverApp {
     fn default() -> Self {
         Self {
-            generation: 0,
             points: vec![Point::default(); 0],
             polygon: Polygon::default(),
             n_o_points: 0,
             n_o_nodes: 3,
-            circumference: 0_f32,
+            circumference: vec![f32::default();0],
             stepsize: 0.01,
             started: false,
         }
@@ -63,7 +65,7 @@ impl eframe::App for SmallestPolygonCoverApp {
         CentralPanel::default().show(&ctx, |ui| {
             // Painting with a painter on centralpanel
             //ui.painter().line(vec![Pos2::new(0.0, 0.0), Pos2::new(50.0, 50.0)], PathStroke::new(10.0, Color32::RED));
-            egui::Window::new("Options").show(ctx, |ui| {
+            egui::Window::new("Options (beállítások)").show(ctx, |ui| {
                 let mut options_ui = egui::UiBuilder::new();
                 if self.started {
                     options_ui = options_ui.disabled();
@@ -79,8 +81,6 @@ impl eframe::App for SmallestPolygonCoverApp {
                         self.started = false;
                         self.points = setup_points(self.n_o_points);
                         self.polygon = setup_polygon(self.n_o_nodes);
-                        self.generation = 0_u64;
-                        self.circumference = 0_f32;
                     }
                 });
                 if !self.started {
@@ -88,6 +88,7 @@ impl eframe::App for SmallestPolygonCoverApp {
                         self.started = true;
                     }
                 } else if self.started {
+                    self.polygon = steepest_ascent(&self.points, self.polygon.clone(), self.stepsize, &mut self.circumference);
                     if ui.button("Stop").clicked() {
                         self.started = false;
                     }
@@ -98,11 +99,8 @@ impl eframe::App for SmallestPolygonCoverApp {
                         &self.points,
                         self.polygon.clone(),
                         self.stepsize,
-                        &mut self.generation,
                         &mut self.circumference,
                     );
-                    println!("{}", self.generation);
-                    println!("{}", self.circumference);
                 }
                 if ui.button("Reset").clicked() {
                     *self = Self::default();
@@ -162,14 +160,16 @@ fn display_contents(app: &mut SmallestPolygonCoverApp, ctx: &egui::Context, ui: 
     }
     ui.painter().line(points, Stroke::new(5.0, Color32::RED));
 
-    /*egui::Window::new("Graph").show(ctx, |ui| {
+    egui::Window::new("Circumference (kerület)").show(ctx, |ui| {
+        ui.label("Author: Juraj Lukovics");
+        ui.label("GitHub: ");
+        ui.add(egui::Hyperlink::new("https://github.com/Gyorgy0"));
         egui_plot::Plot::new("Plot")
-            .allow_zoom(true)
             .allow_drag(true)
             .legend(Legend::default())
             .show(ui, |plot_ui| {
-                let points = PlotPoints::from_explicit_callback(|x| x.powi(2), .., 10000);
+                let points = PlotPoints::from_ys_f32(&app.circumference);
                 plot_ui.line(Line::new(points));
             });
-    });*/
+    });
 }

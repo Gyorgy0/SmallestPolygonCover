@@ -14,21 +14,6 @@ impl Point {
     }
 }
 
-#[derive(Default, Copy, Clone, Serialize, Deserialize)]
-pub struct PolygonLine {
-    pub point1: Point,
-    pub point2: Point,
-}
-
-impl PolygonLine {
-    pub fn new(point1: Point, point2: Point) -> Self {
-        Self {
-            point1: point1,
-            point2: point2,
-        }
-    }
-}
-
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct Polygon {
     pub k: u8,             // Number of polygon nodes - körbeírandó poligon fokszáma
@@ -64,7 +49,6 @@ pub fn setup_points(n_o_points: u8) -> Vec<Point> {
 
 pub fn setup_polygon(n_o_nodes: u8) -> Polygon {
     let mut poly_nodes: Vec<Point> = vec![];
-    let mut poly_lines: Vec<PolygonLine> = vec![];
     let angle = (2_f32 * PI) / n_o_nodes as f32;
     for i in 0..n_o_nodes as usize {
         poly_nodes.push(Point::new(
@@ -80,12 +64,18 @@ pub fn steepest_ascent(
     points: &[Point],
     mut polygon: Polygon,
     stepsize: f32,
-    generation: &mut u64,
-    circumference: &mut f32,
+    circumference: &mut Vec<f32>,
 ) -> Polygon {
     let mut rnd = rand::rng();
     let mut actual_circumference = 0_f32;
     let n_o_nodes = polygon.nodes.len();
+    if circumference.is_empty() {
+        for i in 0..n_o_nodes {
+            actual_circumference +=
+                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
+        }
+        circumference.push(actual_circumference);
+    }
     for i in 0..n_o_nodes {
         let original_point = polygon.nodes[i];
         let mut new_x_diff = 0_f32;
@@ -96,16 +86,16 @@ pub fn steepest_ascent(
         if !points_are_in_bounds(points, &polygon) {
             polygon.nodes[i] = original_point;
         }
+        actual_circumference = 0_f32;
         for i in 0..n_o_nodes {
             actual_circumference +=
                 calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
         }
-        if actual_circumference > *circumference {
+        if actual_circumference > *circumference.last().unwrap() {
             polygon.nodes[i] = original_point;
         }
     }
-    *circumference = actual_circumference;
-    *generation += 1;
+    circumference.push(actual_circumference);
     polygon
 }
 

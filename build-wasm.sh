@@ -1,0 +1,3 @@
+cargo build --release --target wasm32-unknown-unknown   #cargo builds the WASM binary using the release profile options
+wasm-bindgen --no-typescript --target web --out-dir ./SmallestPolygonCover-release/ --out-name "SmallestPolygonCover" ./target/wasm32-unknown-unknown/release/SmallestPolygonCover.wasm # wasm-bindgen generates the javascript glue code for the WASM binary so it can be used in a static page
+wasm-opt -O -ol 100 -s 100 -o ./SmallestPolygonCover-release/SmallestPolygonCover_bg.wasm ./SmallestPolygonCover-release/SmallestPolygonCover_bg.wasm	# optimizing the WASM binary for speed and size
