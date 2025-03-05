@@ -1,10 +1,10 @@
-use std::{default, ops::RangeInclusive};
+use std::ops::RangeInclusive;
 
-use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Vec2, Visuals, Widget};
+use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Visuals, Widget};
 use egui_plot::{Legend, Line, PlotPoints};
 
 use crate::simulation::{
-    points_are_in_bounds, setup_points, setup_polygon, steepest_ascent, Point, Polygon,
+    setup_points, setup_polygon, steepest_ascent, Point, Polygon,
 };
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -113,18 +113,13 @@ impl eframe::App for SmallestPolygonCoverApp {
 }
 
 fn display_contents(app: &mut SmallestPolygonCoverApp, ctx: &egui::Context, ui: &mut Ui) {
-    // Radius of the circle covered, by the window - Az ablak belülírt körének sugara
-    let mut radius: f32 = 0_f32;
     // Center of the window - Az ablak közepe
     let center: Pos2 = Pos2::new(
         ctx.screen_rect().width() / 2.0,
         ctx.screen_rect().height() / 2.0,
     );
-    if ctx.screen_rect().height() < ctx.screen_rect().width() {
-        radius = ctx.screen_rect().height() / 2.0;
-    } else {
-        radius = ctx.screen_rect().width() / 2.0;
-    }
+    // Radius of the circle covered, by the window - Az ablak belülírt körének sugara
+    let radius = center.x.min(center.y);
     ui.painter().circle(
         Pos2::new(
             ctx.screen_rect().width() / 2.0,

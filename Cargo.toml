@@ -1,5 +1,5 @@
 [package]
-name = "SmallestPolygonCover"
+name = "smallest_polygon_cover"
 version = "1.0.0"
 authors = ["Juraj Lukovics"]
 edition = "2021"
