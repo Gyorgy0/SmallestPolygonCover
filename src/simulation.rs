@@ -60,42 +60,6 @@ pub fn setup_polygon(n_o_nodes: u8) -> Polygon {
     polygon
 }
 
-pub fn steepest_ascent(
-    points: &[Point],
-    mut polygon: Polygon,
-    stepsize: f32,
-    circumference: &mut Vec<f32>,
-) -> Polygon {
-    let mut rnd = rand::rng();
-    let mut actual_circumference = 0_f32;
-    let n_o_nodes = polygon.nodes.len();
-    if circumference.is_empty() {
-        for i in 0..n_o_nodes {
-            actual_circumference +=
-                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
-        }
-        circumference.push(actual_circumference);
-    }
-    for i in 0..n_o_nodes {
-        let original_point = polygon.nodes[i];
-        let new_x_diff = rnd.random_range(-stepsize..=stepsize);
-        let new_y_diff = rnd.random_range(-stepsize..=stepsize);
-        polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
-        if !points_are_in_bounds(points, &polygon) {
-            polygon.nodes[i] = original_point;
-        }
-        actual_circumference = 0_f32;
-        for i in 0..n_o_nodes {
-            actual_circumference +=
-                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
-        }
-        if actual_circumference > *circumference.last().unwrap() {
-            polygon.nodes[i] = original_point;
-        }
-    }
-    circumference.push(actual_circumference);
-    polygon
-}
 
 fn calculate_line_length(point1: &Point, point2: &Point) -> f32 {
     ((point1.x - point2.x).abs().powi(2) + (point1.y - point2.y).abs().powi(2)).sqrt()
@@ -140,4 +104,48 @@ fn point_is_in_bounds(point: Point, polygon: &Polygon) -> bool {
     // Returns true, because the point is inside the polygon
     // Igaz értéket ad vissza, amennyiben a pont a poligon belsejében van
     return true;
+}
+
+pub fn steepest_ascent(
+    points: &[Point],
+    mut polygon: Polygon,
+    stepsize: f32,
+    circumference: &mut Vec<f32>,
+) -> Polygon {
+    let mut rnd = rand::rng();
+    let mut actual_circumference = 0_f32;
+    let n_o_nodes = polygon.nodes.len();
+    if circumference.is_empty() {
+        for i in 0..n_o_nodes {
+            actual_circumference +=
+                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
+        }
+        circumference.push(actual_circumference);
+    }
+    for i in 0..n_o_nodes {
+        let original_point = polygon.nodes[i];
+        let new_x_diff = rnd.random_range(-stepsize..=stepsize);
+        let new_y_diff = rnd.random_range(-stepsize..=stepsize);
+        polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
+        if !points_are_in_bounds(points, &polygon) {
+            polygon.nodes[i] = original_point;
+        }
+        actual_circumference = 0_f32;
+        for i in 0..n_o_nodes {
+            actual_circumference +=
+                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
+        }
+        if actual_circumference > *circumference.last().unwrap() {
+            polygon.nodes[i] = original_point;
+        }
+    }
+    circumference.push(actual_circumference);
+    polygon
+}
+
+pub fn taboo_search(points: &[Point],
+    mut polygon: Polygon,
+    stepsize: f32,
+    circumference: &mut Vec<f32>,) -> Polygon {
+        polygon
 }
