@@ -4,7 +4,7 @@ use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Visuals, Widget};
 use egui_plot::{Legend, Line, PlotPoints};
 
 use crate::simulation::{
-    setup_points, setup_polygon, steepest_ascent, Point, Polygon,
+    execute_function, setup_points, setup_polygon, HeuristicFunction, Point, Polygon,
 };
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -15,6 +15,7 @@ pub struct SmallestPolygonCoverApp {
     points: Vec<Point>,
     #[serde(skip)]
     polygon: Polygon,
+    selected_method: HeuristicFunction,
     n_o_points: u8,
     n_o_nodes: u8,
     #[serde(skip)]
@@ -27,11 +28,12 @@ pub struct SmallestPolygonCoverApp {
 impl Default for SmallestPolygonCoverApp {
     fn default() -> Self {
         Self {
-            points: vec![Point::default(); 0],
+            points: vec![],
             polygon: Polygon::default(),
+            selected_method: HeuristicFunction::SteepestAscent,
             n_o_points: 0,
             n_o_nodes: 3,
-            circumference: vec![f32::default();0],
+            circumference: vec![],
             stepsize: 0.01,
             started: false,
         }
@@ -77,7 +79,28 @@ impl eframe::App for SmallestPolygonCoverApp {
                     egui::Slider::new(&mut self.n_o_nodes, RangeInclusive::new(3, 255)).ui(ui);
                     ui.label("Step size (lépés nagysága):");
                     egui::Slider::new(&mut self.stepsize, RangeInclusive::new(0_f32, 1_f32)).ui(ui);
+                    ui.label("Search method (keresési módszer):");
+                    egui::ComboBox::from_label("")
+                        .selected_text(format!("{}", self.selected_method.to_string()))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.selected_method,
+                                HeuristicFunction::SteepestAscent,
+                                HeuristicFunction::SteepestAscent.to_string(),
+                            );
+                            ui.selectable_value(
+                                &mut self.selected_method,
+                                HeuristicFunction::TabooSearch,
+                                HeuristicFunction::TabooSearch.to_string(),
+                            );
+                            ui.selectable_value(
+                                &mut self.selected_method,
+                                HeuristicFunction::SimulatedCooling,
+                                HeuristicFunction::SimulatedCooling.to_string(),
+                            );
+                        });
                     if ui.button("Generate").clicked() {
+                        self.circumference = vec![];
                         self.started = false;
                         self.points = setup_points(self.n_o_points);
                         self.polygon = setup_polygon(self.n_o_nodes);
@@ -88,23 +111,42 @@ impl eframe::App for SmallestPolygonCoverApp {
                         self.started = true;
                     }
                 } else if self.started {
-                    self.polygon = steepest_ascent(&self.points, self.polygon.clone(), self.stepsize, &mut self.circumference);
+                    self.polygon = execute_function(
+                        &self.points,
+                        self.polygon.clone(),
+                        self.stepsize,
+                        &mut self.circumference,
+                        &self.selected_method,
+                    );
                     if ui.button("Stop").clicked() {
                         self.started = false;
                     }
                 }
 
                 if ui.button("Next generation").clicked() {
-                    self.polygon = steepest_ascent(
+                    self.polygon = execute_function(
                         &self.points,
                         self.polygon.clone(),
                         self.stepsize,
                         &mut self.circumference,
+                        &self.selected_method,
                     );
                 }
                 if ui.button("Reset").clicked() {
                     *self = Self::default();
                 }
+            });
+            egui::Window::new("Circumference (kerület)").show(ctx, |ui| {
+                ui.label("Author: Juraj Lukovics");
+                ui.label(egui::special_emojis::GITHUB.to_string() + " GitHub: ");
+                ui.add(egui::Hyperlink::new("https://github.com/Gyorgy0"));
+                egui_plot::Plot::new("Plot")
+                    .allow_drag(true)
+                    .legend(Legend::default())
+                    .show(ui, |plot_ui| {
+                        let points = PlotPoints::from_ys_f32(&self.circumference);
+                        plot_ui.line(Line::new(points));
+                    });
             });
             display_contents(self, ctx, ui);
             ctx.request_repaint();
@@ -154,17 +196,4 @@ fn display_contents(app: &mut SmallestPolygonCoverApp, ctx: &egui::Context, ui: 
         ));
     }
     ui.painter().line(points, Stroke::new(5.0, Color32::RED));
-
-    egui::Window::new("Circumference (kerület)").show(ctx, |ui| {
-        ui.label("Author: Juraj Lukovics");
-        ui.label("GitHub: ");
-        ui.add(egui::Hyperlink::new("https://github.com/Gyorgy0"));
-        egui_plot::Plot::new("Plot")
-            .allow_drag(true)
-            .legend(Legend::default())
-            .show(ui, |plot_ui| {
-                let points = PlotPoints::from_ys_f32(&app.circumference);
-                plot_ui.line(Line::new(points));
-            });
-    });
 }

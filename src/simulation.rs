@@ -1,6 +1,7 @@
+use core::fmt;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::f32::consts::PI;
+use std::f32::{self, consts::PI};
 
 #[derive(Default, Copy, Clone, Serialize, Deserialize)]
 pub struct Point {
@@ -60,7 +61,6 @@ pub fn setup_polygon(n_o_nodes: u8) -> Polygon {
     polygon
 }
 
-
 fn calculate_line_length(point1: &Point, point2: &Point) -> f32 {
     ((point1.x - point2.x).abs().powi(2) + (point1.y - point2.y).abs().powi(2)).sqrt()
 }
@@ -106,7 +106,42 @@ fn point_is_in_bounds(point: Point, polygon: &Polygon) -> bool {
     return true;
 }
 
-pub fn steepest_ascent(
+#[derive(PartialEq, Copy, Clone, Serialize, Deserialize)]
+pub enum HeuristicFunction {
+    SteepestAscent,
+    TabooSearch,
+    SimulatedCooling,
+}
+
+impl fmt::Display for HeuristicFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HeuristicFunction::SteepestAscent => write!(f, "Steepest ascent"),
+            HeuristicFunction::TabooSearch => write!(f, "Taboo search"),
+            HeuristicFunction::SimulatedCooling => write!(f, "Simulated cooling"),
+        }
+    }
+}
+
+pub fn execute_function(
+    points: &[Point],
+    polygon: Polygon,
+    stepsize: f32,
+    circumference: &mut Vec<f32>,
+    selected_method: &HeuristicFunction,
+) -> Polygon {
+    match selected_method {
+        HeuristicFunction::SteepestAscent => {
+            steepest_ascent(points, polygon, stepsize, circumference)
+        }
+        HeuristicFunction::TabooSearch => taboo_search(points, polygon, stepsize, circumference),
+        HeuristicFunction::SimulatedCooling => {
+            simulated_cooling(points, polygon, stepsize, circumference)
+        }
+    }
+}
+
+fn steepest_ascent(
     points: &[Point],
     mut polygon: Polygon,
     stepsize: f32,
@@ -124,10 +159,18 @@ pub fn steepest_ascent(
     }
     for i in 0..n_o_nodes {
         let original_point = polygon.nodes[i];
-        let new_x_diff = rnd.random_range(-stepsize..=stepsize);
-        let new_y_diff = rnd.random_range(-stepsize..=stepsize);
+        let rand_degreee = rnd.random_range(0_f32..=(2_f32 * PI));
+        let new_x_diff = rand_degreee.sin() * stepsize;
+        let new_y_diff = rand_degreee.cos() * stepsize;
         polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
-        if !points_are_in_bounds(points, &polygon) {
+        actual_circumference = 0_f32;
+        for i in 0..n_o_nodes {
+            actual_circumference +=
+                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
+        }
+        if actual_circumference > circumference[circumference.len() - 1]
+            || !points_are_in_bounds(points, &polygon)
+        {
             polygon.nodes[i] = original_point;
         }
         actual_circumference = 0_f32;
@@ -135,17 +178,25 @@ pub fn steepest_ascent(
             actual_circumference +=
                 calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
         }
-        if actual_circumference > *circumference.last().unwrap() {
-            polygon.nodes[i] = original_point;
-        }
     }
     circumference.push(actual_circumference);
     polygon
 }
 
-pub fn taboo_search(points: &[Point],
+fn taboo_search(
+    points: &[Point],
     mut polygon: Polygon,
     stepsize: f32,
-    circumference: &mut Vec<f32>,) -> Polygon {
-        polygon
+    circumference: &mut Vec<f32>,
+) -> Polygon {
+    polygon
+}
+
+fn simulated_cooling(
+    points: &[Point],
+    mut polygon: Polygon,
+    stepsize: f32,
+    circumference: &mut Vec<f32>,
+) -> Polygon {
+    polygon
 }
