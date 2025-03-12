@@ -1,7 +1,8 @@
-use core::fmt;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::f32::{self, consts::PI};
+use std::fmt;
+use strum_macros::EnumIter;
 
 #[derive(Default, Copy, Clone, Serialize, Deserialize)]
 pub struct Point {
@@ -106,19 +107,33 @@ fn point_is_in_bounds(point: Point, polygon: &Polygon) -> bool {
     return true;
 }
 
-#[derive(PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub enum HeuristicFunction {
+#[derive(PartialEq, Copy, Clone, Serialize, Deserialize, EnumIter)]
+pub enum Heuristics {
+    Stochastic,
     SteepestAscent,
+    RandomRestart,
     TabooSearch,
-    SimulatedCooling,
+    SimulatedCoolingTimeLimit,
+    SimulatedCoolingConstant,
+    SimulatedCoolingFitnessDependent,
 }
 
-impl fmt::Display for HeuristicFunction {
+impl fmt::Display for Heuristics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HeuristicFunction::SteepestAscent => write!(f, "Steepest ascent"),
-            HeuristicFunction::TabooSearch => write!(f, "Taboo search"),
-            HeuristicFunction::SimulatedCooling => write!(f, "Simulated cooling"),
+            Heuristics::Stochastic => write!(f, "Stochastic"),
+            Heuristics::SteepestAscent => write!(f, "Steepest ascent"),
+            Heuristics::RandomRestart => write!(f, "Random restart"),
+            Heuristics::TabooSearch => write!(f, "Stochastic + Taboo search"),
+            Heuristics::SimulatedCoolingTimeLimit => {
+                write!(f, "Stochastic + Simulated cooling (time limit)")
+            }
+            Heuristics::SimulatedCoolingConstant => {
+                write!(f, "Stochastic + Simulated cooling (constant)")
+            }
+            Heuristics::SimulatedCoolingFitnessDependent => {
+                write!(f, "Stochastic + Simulated cooling (fitness dependent)")
+            }
         }
     }
 }
@@ -128,17 +143,56 @@ pub fn execute_function(
     polygon: Polygon,
     stepsize: f32,
     circumference: &mut Vec<f32>,
-    selected_method: &HeuristicFunction,
+    selected_method: &Heuristics,
 ) -> Polygon {
     match selected_method {
-        HeuristicFunction::SteepestAscent => {
-            steepest_ascent(points, polygon, stepsize, circumference)
-        }
-        HeuristicFunction::TabooSearch => taboo_search(points, polygon, stepsize, circumference),
-        HeuristicFunction::SimulatedCooling => {
+        Heuristics::Stochastic => stochastic(points, polygon, stepsize, circumference),
+        Heuristics::SteepestAscent => steepest_ascent(points, polygon, stepsize, circumference),
+        Heuristics::RandomRestart => todo!(),
+        Heuristics::TabooSearch => taboo_search(points, polygon, stepsize, circumference),
+        Heuristics::SimulatedCoolingTimeLimit => {
             simulated_cooling(points, polygon, stepsize, circumference)
         }
+        Heuristics::SimulatedCoolingConstant => todo!(),
+        Heuristics::SimulatedCoolingFitnessDependent => todo!(),
     }
+}
+
+fn stochastic(
+    points: &[Point],
+    mut polygon: Polygon,
+    stepsize: f32,
+    circumference: &mut Vec<f32>,
+) -> Polygon {
+    let mut rnd = rand::rng();
+    let mut actual_circumference = 0_f32;
+    let n_o_nodes = polygon.nodes.len();
+    if circumference.is_empty() {
+        for i in 0..n_o_nodes {
+            actual_circumference +=
+                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
+        }
+        circumference.push(actual_circumference);
+    }
+    for i in 0..n_o_nodes {
+        let original_point = polygon.nodes[i];
+        let rand_degreee = rnd.random_range(0_f32..=(2_f32 * PI));
+        let new_x_diff = rand_degreee.sin() * stepsize;
+        let new_y_diff = rand_degreee.cos() * stepsize;
+        polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
+        actual_circumference = 0_f32;
+        for i in 0..n_o_nodes {
+            actual_circumference +=
+                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
+        }
+        if actual_circumference > circumference[circumference.len() - 1]
+            || !points_are_in_bounds(points, &polygon)
+        {
+            polygon.nodes[i] = original_point;
+        }
+    }
+    circumference.push(actual_circumference);
+    polygon
 }
 
 fn steepest_ascent(

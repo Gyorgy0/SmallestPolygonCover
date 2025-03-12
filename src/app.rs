@@ -1,10 +1,10 @@
-use std::ops::RangeInclusive;
-
 use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Visuals, Widget};
 use egui_plot::{Legend, Line, PlotPoints};
+use std::ops::RangeInclusive;
+use strum::IntoEnumIterator;
 
 use crate::simulation::{
-    execute_function, setup_points, setup_polygon, HeuristicFunction, Point, Polygon,
+    execute_function, setup_points, setup_polygon, Heuristics, Point, Polygon,
 };
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -15,7 +15,7 @@ pub struct SmallestPolygonCoverApp {
     points: Vec<Point>,
     #[serde(skip)]
     polygon: Polygon,
-    selected_method: HeuristicFunction,
+    selected_method: Heuristics,
     n_o_points: u8,
     n_o_nodes: u8,
     #[serde(skip)]
@@ -30,7 +30,7 @@ impl Default for SmallestPolygonCoverApp {
         Self {
             points: vec![],
             polygon: Polygon::default(),
-            selected_method: HeuristicFunction::SteepestAscent,
+            selected_method: Heuristics::SteepestAscent,
             n_o_points: 0,
             n_o_nodes: 3,
             circumference: vec![],
@@ -83,21 +83,13 @@ impl eframe::App for SmallestPolygonCoverApp {
                     egui::ComboBox::from_label("")
                         .selected_text(format!("{}", self.selected_method.to_string()))
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut self.selected_method,
-                                HeuristicFunction::SteepestAscent,
-                                HeuristicFunction::SteepestAscent.to_string(),
-                            );
-                            ui.selectable_value(
-                                &mut self.selected_method,
-                                HeuristicFunction::TabooSearch,
-                                HeuristicFunction::TabooSearch.to_string(),
-                            );
-                            ui.selectable_value(
-                                &mut self.selected_method,
-                                HeuristicFunction::SimulatedCooling,
-                                HeuristicFunction::SimulatedCooling.to_string(),
-                            );
+                            Heuristics::iter().for_each(|method| {
+                                ui.selectable_value(
+                                    &mut self.selected_method,
+                                    method,
+                                    method.to_string(),
+                                );
+                            });
                         });
                     if ui.button("Generate").clicked() {
                         self.circumference = vec![];
