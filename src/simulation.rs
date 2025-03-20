@@ -113,9 +113,9 @@ pub enum Heuristics {
     SteepestAscent,
     RandomRestart,
     TabooSearch,
-    SimulatedCoolingTimeLimit,
-    SimulatedCoolingConstant,
-    SimulatedCoolingFitnessDependent,
+    SCTimeLimit,
+    SCConstant,
+    SCFitnessDependent,
 }
 
 impl fmt::Display for Heuristics {
@@ -125,13 +125,9 @@ impl fmt::Display for Heuristics {
             Heuristics::SteepestAscent => write!(f, "Steepest ascent"),
             Heuristics::RandomRestart => write!(f, "Random restart"),
             Heuristics::TabooSearch => write!(f, "Stochastic + Taboo search"),
-            Heuristics::SimulatedCoolingTimeLimit => {
-                write!(f, "Stochastic + Simulated cooling (time limit)")
-            }
-            Heuristics::SimulatedCoolingConstant => {
-                write!(f, "Stochastic + Simulated cooling (constant)")
-            }
-            Heuristics::SimulatedCoolingFitnessDependent => {
+            Heuristics::SCTimeLimit => write!(f, "Stochastic + Simulated cooling (time limit)"),
+            Heuristics::SCConstant => write!(f, "Stochastic + Simulated cooling (constant)"),
+            Heuristics::SCFitnessDependent => {
                 write!(f, "Stochastic + Simulated cooling (fitness dependent)")
             }
         }
@@ -150,11 +146,9 @@ pub fn execute_function(
         Heuristics::SteepestAscent => steepest_ascent(points, polygon, stepsize, circumference),
         Heuristics::RandomRestart => todo!(),
         Heuristics::TabooSearch => taboo_search(points, polygon, stepsize, circumference),
-        Heuristics::SimulatedCoolingTimeLimit => {
-            simulated_cooling(points, polygon, stepsize, circumference)
-        }
-        Heuristics::SimulatedCoolingConstant => todo!(),
-        Heuristics::SimulatedCoolingFitnessDependent => todo!(),
+        Heuristics::SCTimeLimit => simulated_cooling(points, polygon, stepsize, circumference),
+        Heuristics::SCConstant => todo!(),
+        Heuristics::SCFitnessDependent => todo!(),
     }
 }
 

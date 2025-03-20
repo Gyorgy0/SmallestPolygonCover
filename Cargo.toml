@@ -6,22 +6,18 @@ edition = "2021"
 
 [dependencies]
 egui = "0.31.0"
-eframe = { version = "0.31.0", default-features = false, features = [
-    "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
-    "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-    "persistence",   # Enable restoring app state when restarting the app.
-    "wayland",       # To support Linux (and CI)
-] }
+eframe = { version = "0.31.0", default-features = false, features = ["accesskit", "android-native-activity", "default_fonts", "glow", "persistence", "wayland", "x11"] }
 log = "0.4"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
 egui_plot = "0.31.0"
 rand = "0.9.0"
-getrandom = { version = "0.3.1", features = ["wasm_js"] }
+getrandom = { version = "0.3.2", features = ["wasm_js"] }
 strum = { version = "0.27.1", features = ["strum_macros"] }
 strum_macros = "0.27.1"
+winit = { version = "0.30.9", features = ["android-native-activity"] }
+android_logger = "0.15.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -31,6 +27,10 @@ env_logger = "0.11"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3.70"           # to access the DOM (to hide the loading text)
+
+[lib]
+# cdylib is required for Android, lib is required for desktop
+crate-type = ["cdylib", "lib"]
 
 [profile.release]
 opt-level = 2 # fast and small wasm

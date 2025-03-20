@@ -18,6 +18,10 @@ pub struct SmallestPolygonCoverApp {
     selected_method: Heuristics,
     n_o_points: u8,
     n_o_nodes: u8,
+    // How much generations are allowed to not be better than the previous generations
+    // Megadja mennyi generáción keresztül nem szükséges változásnak lenni
+    n_o_stop_generations: u32,
+    stop_generation_counter: u32,
     #[serde(skip)]
     circumference: Vec<f32>,
     stepsize: f32,
@@ -33,6 +37,8 @@ impl Default for SmallestPolygonCoverApp {
             selected_method: Heuristics::SteepestAscent,
             n_o_points: 0,
             n_o_nodes: 3,
+            n_o_stop_generations: 0,
+            stop_generation_counter: 0,
             circumference: vec![],
             stepsize: 0.01,
             started: false,
