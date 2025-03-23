@@ -1,8 +1,10 @@
-use rand::Rng;
+use rand::{rng, Rng};
 use serde::{Deserialize, Serialize};
 use std::f32::{self, consts::PI};
 use std::fmt;
 use strum_macros::EnumIter;
+
+use crate::SmallestPolygonCoverApp;
 
 #[derive(Default, Copy, Clone, Serialize, Deserialize)]
 pub struct Point {
@@ -52,10 +54,11 @@ pub fn setup_points(n_o_points: u8) -> Vec<Point> {
 pub fn setup_polygon(n_o_nodes: u8) -> Polygon {
     let mut poly_nodes: Vec<Point> = vec![];
     let angle = (2_f32 * PI) / n_o_nodes as f32;
+    let rnd_offset = rng().random_range(0_f32..(2_f32 * PI));
     for i in 0..n_o_nodes as usize {
         poly_nodes.push(Point::new(
-            (i as f32 * angle).sin(),
-            (i as f32 * angle).cos(),
+            (i as f32 * angle + rnd_offset).sin(),
+            (i as f32 * angle + rnd_offset).cos(),
         ));
     }
     let polygon: Polygon = Polygon::new(n_o_nodes, poly_nodes);
@@ -134,19 +137,37 @@ impl fmt::Display for Heuristics {
     }
 }
 
-pub fn execute_function(
-    points: &[Point],
-    polygon: Polygon,
-    stepsize: f32,
-    circumference: &mut Vec<f32>,
-    selected_method: &Heuristics,
-) -> Polygon {
-    match selected_method {
-        Heuristics::Stochastic => stochastic(points, polygon, stepsize, circumference),
-        Heuristics::SteepestAscent => steepest_ascent(points, polygon, stepsize, circumference),
+pub fn execute_function(app: &mut SmallestPolygonCoverApp) -> Polygon {
+    match app.selected_method {
+        Heuristics::Stochastic => stochastic(
+            &app.points,
+            &mut app.polygon,
+            app.stepsize,
+            app.n_o_stop_generations,
+            &mut app.stop_generation_counter,
+            &mut app.circumference,
+            &mut app.started,
+        ),
+        Heuristics::SteepestAscent => steepest_ascent(
+            &app.points,
+            &mut app.polygon,
+            app.stepsize,
+            app.search_resolution,
+            &mut app.circumference,
+        ),
         Heuristics::RandomRestart => todo!(),
-        Heuristics::TabooSearch => taboo_search(points, polygon, stepsize, circumference),
-        Heuristics::SCTimeLimit => simulated_cooling(points, polygon, stepsize, circumference),
+        Heuristics::TabooSearch => taboo_search(
+            &app.points,
+            &mut app.polygon,
+            app.stepsize,
+            &mut app.circumference,
+        ),
+        Heuristics::SCTimeLimit => simulated_cooling(
+            &app.points,
+            &mut app.polygon,
+            app.stepsize,
+            &mut app.circumference,
+        ),
         Heuristics::SCConstant => todo!(),
         Heuristics::SCFitnessDependent => todo!(),
     }
@@ -154,9 +175,12 @@ pub fn execute_function(
 
 fn stochastic(
     points: &[Point],
-    mut polygon: Polygon,
+    polygon: &mut Polygon,
     stepsize: f32,
+    n_o_stop_generations: u8,
+    stop_generation_counter: &mut u8,
     circumference: &mut Vec<f32>,
+    started: &mut bool,
 ) -> Polygon {
     let mut rnd = rand::rng();
     let mut actual_circumference = 0_f32;
@@ -184,20 +208,38 @@ fn stochastic(
         {
             polygon.nodes[i] = original_point;
         }
+        actual_circumference = 0_f32;
+        for i in 0..n_o_nodes {
+            actual_circumference +=
+                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
+        }
+    }
+    // Stopping condition - megállási feltétel
+    if actual_circumference == *circumference.last().unwrap() {
+        *stop_generation_counter += 1;
+    } else if actual_circumference != *circumference.last().unwrap() {
+        *stop_generation_counter = 0;
+    }
+    if *started && *stop_generation_counter == n_o_stop_generations {
+        *started = false
     }
     circumference.push(actual_circumference);
-    polygon
+    polygon.clone()
 }
 
 fn steepest_ascent(
     points: &[Point],
-    mut polygon: Polygon,
+    polygon: &mut Polygon,
     stepsize: f32,
+    search_resolution: u32,
     circumference: &mut Vec<f32>,
 ) -> Polygon {
     let mut rnd = rand::rng();
     let mut actual_circumference = 0_f32;
     let n_o_nodes = polygon.nodes.len();
+    let rnd_offset = rng().random_range(0_f32..(2_f32 * PI));
+    let original_point = polygon.nodes[rnd.random_range(0..polygon.k) as usize];
+    for i in 0..search_resolution {}
     if circumference.is_empty() {
         for i in 0..n_o_nodes {
             actual_circumference +=
@@ -205,46 +247,23 @@ fn steepest_ascent(
         }
         circumference.push(actual_circumference);
     }
-    for i in 0..n_o_nodes {
-        let original_point = polygon.nodes[i];
-        let rand_degreee = rnd.random_range(0_f32..=(2_f32 * PI));
-        let new_x_diff = rand_degreee.sin() * stepsize;
-        let new_y_diff = rand_degreee.cos() * stepsize;
-        polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
-        actual_circumference = 0_f32;
-        for i in 0..n_o_nodes {
-            actual_circumference +=
-                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
-        }
-        if actual_circumference > circumference[circumference.len() - 1]
-            || !points_are_in_bounds(points, &polygon)
-        {
-            polygon.nodes[i] = original_point;
-        }
-        actual_circumference = 0_f32;
-        for i in 0..n_o_nodes {
-            actual_circumference +=
-                calculate_line_length(&polygon.nodes[i], &polygon.nodes[(i + 1) % n_o_nodes]);
-        }
-    }
-    circumference.push(actual_circumference);
-    polygon
+    polygon.clone()
 }
 
 fn taboo_search(
     points: &[Point],
-    mut polygon: Polygon,
+    polygon: &mut Polygon,
     stepsize: f32,
     circumference: &mut Vec<f32>,
 ) -> Polygon {
-    polygon
+    polygon.clone()
 }
 
 fn simulated_cooling(
     points: &[Point],
-    mut polygon: Polygon,
+    polygon: &mut Polygon,
     stepsize: f32,
     circumference: &mut Vec<f32>,
 ) -> Polygon {
-    polygon
+    polygon.clone()
 }

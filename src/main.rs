@@ -12,7 +12,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "eframe template",
+        "Smallest polygon cover",
         native_options,
         Box::new(|cc| {
             Ok(Box::new(
@@ -37,7 +37,6 @@ fn main() {
             .expect("No window")
             .document()
             .expect("No document");
-
         let canvas = document
             .get_element_by_id("glcanvas")
             .expect("Failed to find the_canvas_id")

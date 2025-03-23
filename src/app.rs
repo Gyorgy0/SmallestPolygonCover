@@ -1,6 +1,6 @@
 use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Visuals, Widget};
 use egui_plot::{Legend, Line, PlotPoints};
-use std::ops::RangeInclusive;
+use std::{f32::consts::PI, ops::RangeInclusive, u32, vec};
 use strum::IntoEnumIterator;
 
 use crate::simulation::{
@@ -12,21 +12,28 @@ use crate::simulation::{
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct SmallestPolygonCoverApp {
     #[serde(skip)]
-    points: Vec<Point>,
+    pub points: Vec<Point>,
     #[serde(skip)]
-    polygon: Polygon,
-    selected_method: Heuristics,
-    n_o_points: u8,
-    n_o_nodes: u8,
-    // How much generations are allowed to not be better than the previous generations
-    // Megadja mennyi generáción keresztül nem szükséges változásnak lenni
-    n_o_stop_generations: u32,
-    stop_generation_counter: u32,
+    pub polygon: Polygon,
+    pub selected_method: Heuristics,
+    pub n_o_points: u8,
+    pub n_o_nodes: u8,
+    pub n_o_stop_generations: u8,
     #[serde(skip)]
-    circumference: Vec<f32>,
-    stepsize: f32,
+    pub stop_generation_counter: u8,
+    pub search_resolution: u32,
     #[serde(skip)]
-    started: bool,
+    pub stuck: bool,
+    pub n_o_searches: u32,
+    #[serde(skip)]
+    pub search_counter: u32,
+    #[serde(skip)]
+    pub temp: Vec<f32>,
+    #[serde(skip)]
+    pub circumference: Vec<f32>,
+    pub stepsize: f32,
+    #[serde(skip)]
+    pub started: bool,
 }
 
 impl Default for SmallestPolygonCoverApp {
@@ -39,8 +46,13 @@ impl Default for SmallestPolygonCoverApp {
             n_o_nodes: 3,
             n_o_stop_generations: 0,
             stop_generation_counter: 0,
+            search_resolution: 100,
+            stuck: false,
+            n_o_searches: 1,
+            search_counter: 0,
+            temp: vec![],
             circumference: vec![],
-            stepsize: 0.01,
+            stepsize: 0.01_f32,
             started: false,
         }
     }
@@ -71,8 +83,6 @@ impl eframe::App for SmallestPolygonCoverApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         CentralPanel::default().show(&ctx, |ui| {
-            // Painting with a painter on centralpanel
-            //ui.painter().line(vec![Pos2::new(0.0, 0.0), Pos2::new(50.0, 50.0)], PathStroke::new(10.0, Color32::RED));
             egui::Window::new("Options (beállítások)").show(ctx, |ui| {
                 let mut options_ui = egui::UiBuilder::new();
                 if self.started {
@@ -97,6 +107,41 @@ impl eframe::App for SmallestPolygonCoverApp {
                                 );
                             });
                         });
+                    ui.separator();
+                    ui.label("Stopping conditions (megállási feltételek)");
+                    // Stochastic method stopping conditions - sztohasztikus módszer megállási feltétele
+                    if self.selected_method == Heuristics::Stochastic {
+                        ui.label(
+                            "Number of not improving generations (nem javuló generációk száma):",
+                        );
+                        // n_o_stop_generations - this variable specifies how much generations are allowed that are not better than the previous
+                        // n_o_stop_generation - ez a változó megadja mennyi generáció lehet, amely nem jobb, mint az előző
+                        egui::Slider::new(
+                            &mut self.n_o_stop_generations,
+                            RangeInclusive::new(0_u8, u8::MAX),
+                        )
+                        .ui(ui);
+                    }
+                    if self.selected_method == Heuristics::SteepestAscent {
+                        ui.label("Search resolution (keresés részletessége):");
+                        // search_resolution - this variable defines how many point do we need to look for
+                        egui::Slider::new(
+                            &mut self.search_resolution,
+                            RangeInclusive::new(1_u32, u32::MAX),
+                        )
+                        .ui(ui);
+                    }
+                    if self.selected_method == Heuristics::RandomRestart {
+                        ui.label("Number of searches (keresések száma):");
+                        // n_o_searches - this variable specifies how much searches do we need to start
+                        // n_o_searches - ez a változó megadja az indítandó keresések számát
+                        egui::Slider::new(
+                            &mut self.n_o_searches,
+                            RangeInclusive::new(0_u32, u32::MAX),
+                        )
+                        .ui(ui);
+                    }
+                    ui.separator();
                     if ui.button("Generate").clicked() {
                         self.circumference = vec![];
                         self.started = false;
@@ -109,26 +154,14 @@ impl eframe::App for SmallestPolygonCoverApp {
                         self.started = true;
                     }
                 } else if self.started {
-                    self.polygon = execute_function(
-                        &self.points,
-                        self.polygon.clone(),
-                        self.stepsize,
-                        &mut self.circumference,
-                        &self.selected_method,
-                    );
+                    self.polygon = execute_function(self);
                     if ui.button("Stop").clicked() {
                         self.started = false;
                     }
                 }
 
                 if ui.button("Next generation").clicked() {
-                    self.polygon = execute_function(
-                        &self.points,
-                        self.polygon.clone(),
-                        self.stepsize,
-                        &mut self.circumference,
-                        &self.selected_method,
-                    );
+                    self.polygon = execute_function(self);
                 }
                 if ui.button("Reset").clicked() {
                     *self = Self::default();
@@ -158,7 +191,7 @@ fn display_contents(app: &mut SmallestPolygonCoverApp, ctx: &egui::Context, ui: 
         ctx.screen_rect().width() / 2.0,
         ctx.screen_rect().height() / 2.0,
     );
-    // Radius of the circle covered, by the window - Az ablak belülírt körének sugara
+    // Radius of the circle covered by the window - Az ablak belülírt körének sugara
     let radius = center.x.min(center.y);
     ui.painter().circle(
         Pos2::new(
@@ -169,18 +202,6 @@ fn display_contents(app: &mut SmallestPolygonCoverApp, ctx: &egui::Context, ui: 
         Color32::from_rgba_unmultiplied(0, 0, 0, 0),
         Stroke::new(15.0, Color32::from_rgba_unmultiplied(255, 0, 0, 50)),
     );
-    // Displaying points - Pontok megjelenítése
-    for i in 0..app.points.len() {
-        ui.painter().circle(
-            Pos2::new(
-                (ctx.screen_rect().width() / 2.0) + (radius * app.points[i].x),
-                (ctx.screen_rect().height() / 2.0) + (radius * app.points[i].y),
-            ),
-            1.0,
-            Color32::from_rgba_unmultiplied(0, 0, 0, 10),
-            Stroke::new(1.0, Color32::BLACK),
-        );
-    }
     // Displaying the polygon - Poligon megjelenítése
     let mut points: Vec<Pos2> = vec![];
     for i in 0..app.polygon.nodes.len() {
@@ -194,4 +215,16 @@ fn display_contents(app: &mut SmallestPolygonCoverApp, ctx: &egui::Context, ui: 
         ));
     }
     ui.painter().line(points, Stroke::new(5.0, Color32::RED));
+    // Displaying points - Pontok megjelenítése
+    for i in 0..app.points.len() {
+        ui.painter().circle(
+            Pos2::new(
+                (ctx.screen_rect().width() / 2.0) + (radius * app.points[i].x),
+                (ctx.screen_rect().height() / 2.0) + (radius * app.points[i].y),
+            ),
+            2.5,
+            Color32::from_rgba_unmultiplied(0, 0, 0, 50),
+            Stroke::new(1.0, Color32::BLACK),
+        );
+    }
 }
