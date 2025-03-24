@@ -123,11 +123,22 @@ impl eframe::App for SmallestPolygonCoverApp {
                         .ui(ui);
                     }
                     if self.selected_method == Heuristics::SteepestAscent {
+                        ui.label(
+                            "Number of not improving generations (nem javuló generációk száma):",
+                        );
+                        // n_o_stop_generations - this variable specifies how much generations are allowed that are not better than the previous
+                        // n_o_stop_generation - ez a változó megadja mennyi generáció lehet, amely nem jobb, mint az előző
+                        egui::Slider::new(
+                            &mut self.n_o_stop_generations,
+                            RangeInclusive::new(0_u8, u8::MAX),
+                        )
+                        .ui(ui);
                         ui.label("Search resolution (keresés részletessége):");
                         // search_resolution - this variable defines how many point do we need to look for
+                        // search_resolution - ez a változó megadja, hogy mennyiszer kell lefuttatnunk a keresést
                         egui::Slider::new(
                             &mut self.search_resolution,
-                            RangeInclusive::new(1_u32, u32::MAX),
+                            RangeInclusive::new(3_u32, u32::MAX),
                         )
                         .ui(ui);
                     }
