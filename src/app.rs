@@ -118,7 +118,7 @@ impl eframe::App for SmallestPolygonCoverApp {
                         // n_o_stop_generation - ez a változó megadja mennyi generáció lehet, amely nem jobb, mint az előző
                         egui::Slider::new(
                             &mut self.n_o_stop_generations,
-                            RangeInclusive::new(0_u8, u8::MAX),
+                            RangeInclusive::new(1_u8, u8::MAX),
                         )
                         .ui(ui);
                     }
@@ -130,7 +130,7 @@ impl eframe::App for SmallestPolygonCoverApp {
                         // n_o_stop_generation - ez a változó megadja mennyi generáció lehet, amely nem jobb, mint az előző
                         egui::Slider::new(
                             &mut self.n_o_stop_generations,
-                            RangeInclusive::new(0_u8, u8::MAX),
+                            RangeInclusive::new(1_u8, u8::MAX),
                         )
                         .ui(ui);
                         ui.label("Search resolution (keresés részletessége):");

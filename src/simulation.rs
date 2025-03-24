@@ -223,7 +223,7 @@ fn stochastic(
     } else if actual_circumference != *circumference.last().unwrap() {
         *stop_generation_counter = 0;
     }
-    if *started && *stop_generation_counter == n_o_stop_generations {
+    if *stop_generation_counter == n_o_stop_generations {
         *stop_generation_counter = 0;
         *started = false
     }
@@ -261,14 +261,14 @@ fn steepest_ascent(
         }
     }
     polygon.nodes[random_index] = best_point;
-    best_circumference = caculate_circumference(polygon);
+    actual_circumference = caculate_circumference(polygon);
     // Stopping condition - megállási feltétel
     if actual_circumference == *circumference.last().unwrap_or(&0_f32) {
         *stop_generation_counter += 1;
     } else if actual_circumference != *circumference.last().unwrap_or(&0_f32) {
         *stop_generation_counter = 0;
     }
-    if *started && *stop_generation_counter == n_o_stop_generations {
+    if *stop_generation_counter == n_o_stop_generations {
         *stop_generation_counter = 0;
         *started = false;
     }
