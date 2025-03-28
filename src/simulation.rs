@@ -124,9 +124,8 @@ fn point_is_in_bounds(point: Point, polygon: &Polygon) -> bool {
 #[derive(PartialEq, Copy, Clone, Serialize, Deserialize, EnumIter)]
 pub enum Heuristics {
     Stochastic,
-    SteepestAscent,
-    RandomRestart,
-    TabooSearch,
+    SteepestAscentOneNode,
+    SteepestAscentAllNodes,
     SCTimeLimit,
     SCConstant,
     SCFitnessDependent,
@@ -136,9 +135,8 @@ impl fmt::Display for Heuristics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Heuristics::Stochastic => write!(f, "Stochastic"),
-            Heuristics::SteepestAscent => write!(f, "Steepest ascent"),
-            Heuristics::RandomRestart => write!(f, "Random restart"),
-            Heuristics::TabooSearch => write!(f, "Stochastic + Taboo search"),
+            Heuristics::SteepestAscentOneNode => write!(f, "Steepest ascent (one node)"),
+            Heuristics::SteepestAscentAllNodes => write!(f, "Steepest ascent (all nodes)"),
             Heuristics::SCTimeLimit => write!(f, "Stochastic + Simulated cooling (time limit)"),
             Heuristics::SCConstant => write!(f, "Stochastic + Simulated cooling (constant)"),
             Heuristics::SCFitnessDependent => {
@@ -159,7 +157,7 @@ pub fn execute_function(app: &mut SmallestPolygonCoverApp) -> Polygon {
             &mut app.circumference,
             &mut app.started,
         ),
-        Heuristics::SteepestAscent => steepest_ascent(
+        Heuristics::SteepestAscentOneNode => steepest_ascent(
             &app.points,
             &mut app.polygon,
             app.stepsize,
@@ -169,12 +167,15 @@ pub fn execute_function(app: &mut SmallestPolygonCoverApp) -> Polygon {
             &mut app.circumference,
             &mut app.started,
         ),
-        Heuristics::RandomRestart => todo!(),
-        Heuristics::TabooSearch => taboo_search(
+        Heuristics::SteepestAscentAllNodes => steepest_ascent_all(
             &app.points,
             &mut app.polygon,
             app.stepsize,
+            app.search_resolution,
+            app.n_o_stop_generations,
+            &mut app.stop_generation_counter,
             &mut app.circumference,
+            &mut app.started,
         ),
         Heuristics::SCTimeLimit => simulated_cooling(
             &app.points,
@@ -245,8 +246,8 @@ fn steepest_ascent(
     let mut actual_circumference = 0_f32;
     let n_o_nodes = polygon.nodes.len();
     let random_index = rnd.random_range(0..polygon.k) as usize;
-    let original_point = polygon.nodes[random_index];
     let mut best_circumference = caculate_circumference(&polygon);
+    let original_point = polygon.nodes[random_index];
     let mut best_point = original_point;
     for i in 0..search_resolution {
         let new_x_diff = (i as f32 * 2_f32 * PI / search_resolution as f32).sin() * stepsize;
@@ -261,6 +262,55 @@ fn steepest_ascent(
         }
     }
     polygon.nodes[random_index] = best_point;
+    actual_circumference = caculate_circumference(polygon);
+    // Stopping condition - megállási feltétel
+    if actual_circumference == *circumference.last().unwrap_or(&0_f32) {
+        *stop_generation_counter += 1;
+    } else if actual_circumference != *circumference.last().unwrap_or(&0_f32) {
+        *stop_generation_counter = 0;
+    }
+    if *stop_generation_counter == n_o_stop_generations {
+        *stop_generation_counter = 0;
+        *started = false;
+    }
+    circumference.push(best_circumference);
+    polygon.clone()
+}
+
+fn steepest_ascent_all(
+    points: &[Point],
+    polygon: &mut Polygon,
+    stepsize: f32,
+    search_resolution: u32,
+    n_o_stop_generations: u8,
+    stop_generation_counter: &mut u8,
+    circumference: &mut Vec<f32>,
+    started: &mut bool,
+) -> Polygon {
+    let mut rnd = rand::rng();
+    let mut actual_circumference = 0_f32;
+    let n_o_nodes = polygon.nodes.len();
+    //let random_index = rnd.random_range(0..polygon.k) as usize;
+    let mut best_circumference = caculate_circumference(&polygon);
+    for i in 0..polygon.nodes.len() {
+        let original_point = polygon.nodes[i];
+        best_circumference = caculate_circumference(&polygon);
+        let mut best_point = original_point;
+        for j in 0..search_resolution {
+            let new_x_diff = (j as f32 * 2_f32 * PI / search_resolution as f32).sin() * stepsize;
+            let new_y_diff = (j as f32 * 2_f32 * PI / search_resolution as f32).cos() * stepsize;
+            polygon.nodes[i] =
+                Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
+            actual_circumference = caculate_circumference(&polygon);
+            if actual_circumference <= best_circumference && points_are_in_bounds(points, &polygon)
+            {
+                best_circumference = actual_circumference;
+                best_point = polygon.nodes[i];
+                polygon.nodes[i] = original_point;
+            }
+        }
+        polygon.nodes[i] = best_point;
+    }
     actual_circumference = caculate_circumference(polygon);
     // Stopping condition - megállási feltétel
     if actual_circumference == *circumference.last().unwrap_or(&0_f32) {

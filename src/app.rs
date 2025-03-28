@@ -23,7 +23,6 @@ pub struct SmallestPolygonCoverApp {
     pub stop_generation_counter: u8,
     pub search_resolution: u32,
     #[serde(skip)]
-    pub stuck: bool,
     pub n_o_searches: u32,
     #[serde(skip)]
     pub search_counter: u32,
@@ -41,13 +40,12 @@ impl Default for SmallestPolygonCoverApp {
         Self {
             points: vec![],
             polygon: Polygon::default(),
-            selected_method: Heuristics::SteepestAscent,
+            selected_method: Heuristics::SteepestAscentOneNode,
             n_o_points: 0,
             n_o_nodes: 3,
             n_o_stop_generations: 0,
             stop_generation_counter: 0,
             search_resolution: 100,
-            stuck: false,
             n_o_searches: 1,
             search_counter: 0,
             temp: vec![],
@@ -122,7 +120,9 @@ impl eframe::App for SmallestPolygonCoverApp {
                         )
                         .ui(ui);
                     }
-                    if self.selected_method == Heuristics::SteepestAscent {
+                    if self.selected_method == Heuristics::SteepestAscentOneNode
+                        || self.selected_method == Heuristics::SteepestAscentAllNodes
+                    {
                         ui.label(
                             "Number of not improving generations (nem javuló generációk száma):",
                         );
@@ -142,23 +142,24 @@ impl eframe::App for SmallestPolygonCoverApp {
                         )
                         .ui(ui);
                     }
-                    if self.selected_method == Heuristics::RandomRestart {
-                        ui.label("Number of searches (keresések száma):");
-                        // n_o_searches - this variable specifies how much searches do we need to start
-                        // n_o_searches - ez a változó megadja az indítandó keresések számát
-                        egui::Slider::new(
-                            &mut self.n_o_searches,
-                            RangeInclusive::new(0_u32, u32::MAX),
-                        )
-                        .ui(ui);
-                    }
                     ui.separator();
-                    if ui.button("Generate").clicked() {
+                    if ui.button("Reset").clicked() {
                         self.circumference = vec![];
                         self.started = false;
                         self.points = setup_points(self.n_o_points);
                         self.polygon = setup_polygon(self.n_o_nodes);
                     }
+                    if ui.button("Generate points").clicked() {
+                        self.circumference = vec![];
+                        self.started = false;
+                        self.points = setup_points(self.n_o_points);
+                    }
+                    if ui.button("Generate polygon").clicked() {
+                        self.circumference = vec![];
+                        self.started = false;
+                        self.polygon = setup_polygon(self.n_o_nodes);
+                    }
+                    ui.separator()
                 });
                 if !self.started {
                     if ui.button("Start").clicked() {
@@ -170,11 +171,8 @@ impl eframe::App for SmallestPolygonCoverApp {
                         self.started = false;
                     }
                 }
-
-                if ui.button("Next generation").clicked() {
-                    self.polygon = execute_function(self);
-                }
-                if ui.button("Reset").clicked() {
+                ui.separator();
+                if ui.button("Clear everything").clicked() {
                     *self = Self::default();
                 }
             });
