@@ -1,6 +1,6 @@
 use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Visuals, Widget};
 use egui_plot::{Legend, Line, PlotPoints};
-use std::{f32::consts::PI, ops::RangeInclusive, u32, vec};
+use std::{ops::RangeInclusive, u32};
 use strum::IntoEnumIterator;
 
 use crate::simulation::{
@@ -19,9 +19,16 @@ pub struct SmallestPolygonCoverApp {
     pub n_o_points: u8,
     pub n_o_nodes: u8,
     pub n_o_stop_generations: u8,
+    pub chance_of_bad_step: f32,
+    pub random_polygon: bool,
+    pub iter_limit: u64,
+    pub t_const: f32,
+    pub temp_init: f32,
     #[serde(skip)]
     pub stop_generation_counter: u8,
     pub search_resolution: u32,
+    #[serde(skip)]
+    pub searches: Vec<Polygon>,
     #[serde(skip)]
     pub n_o_searches: u32,
     #[serde(skip)]
@@ -41,13 +48,19 @@ impl Default for SmallestPolygonCoverApp {
             points: vec![],
             polygon: Polygon::default(),
             selected_method: Heuristics::SteepestAscentOneNode,
-            n_o_points: 0,
-            n_o_nodes: 3,
-            n_o_stop_generations: 0,
-            stop_generation_counter: 0,
-            search_resolution: 100,
-            n_o_searches: 1,
-            search_counter: 0,
+            n_o_points: 0_u8,
+            n_o_nodes: 3_u8,
+            n_o_stop_generations: 0_u8,
+            chance_of_bad_step: 0_f32,
+            random_polygon: true,
+            iter_limit: 0_u64,
+            t_const: 0_f32,
+            temp_init: 0_f32,
+            stop_generation_counter: 0_u8,
+            search_resolution: 100_u32,
+            searches: vec![],
+            n_o_searches: 1_u32,
+            search_counter: 0_u32,
             temp: vec![],
             circumference: vec![],
             stepsize: 0.01_f32,
@@ -94,6 +107,10 @@ impl eframe::App for SmallestPolygonCoverApp {
                     ui.label("Step size (lépés nagysága):");
                     egui::Slider::new(&mut self.stepsize, RangeInclusive::new(0_f32, 1_f32)).ui(ui);
                     ui.label("Search method (keresési módszer):");
+                    ui.add(egui::Checkbox::new(
+                        &mut self.random_polygon,
+                        "Random polygon initialization (véletlenszerű poligon inicializálás)",
+                    ));
                     egui::ComboBox::from_label("")
                         .selected_text(format!("{}", self.selected_method.to_string()))
                         .show_ui(ui, |ui| {
@@ -119,9 +136,40 @@ impl eframe::App for SmallestPolygonCoverApp {
                             RangeInclusive::new(1_u8, u8::MAX),
                         )
                         .ui(ui);
+                        ui.label(
+                            "Chance of allowing a bad step (rossz lépés megengedésének esélye):",
+                        );
+                        // chance_of_bad_step - this variable specifies how much the search is allowed to take a "bad step"
+                        // n_o_stop_generation - ez a változó megadja mekkora eséllyel léphetünk a keresés során "rosszat"
+                        egui::Slider::new(
+                            &mut self.chance_of_bad_step,
+                            RangeInclusive::new(0_f32, 1_f32),
+                        )
+                        .ui(ui);
                     }
-                    if self.selected_method == Heuristics::SteepestAscentOneNode
+                    else if self.selected_method == Heuristics::SteepestAscentOneNode
                         || self.selected_method == Heuristics::SteepestAscentAllNodes
+                    {
+                        ui.label(
+                            "Number of not improving generations (nem javuló generációk száma):",
+                        );
+                        // n_o_stop_generations - this variable specifies how much generations are allowed that are not better than the previous
+                        // n_o_stop_generation - ez a változó megadja mennyi generáció lehet, amely nem jobb, mint az előző
+                        egui::Slider::new(
+                            &mut self.n_o_stop_generations,
+                            RangeInclusive::new(1_u8, u8::MAX),
+                        )
+                        .ui(ui);
+                        ui.label("Search resolution (keresés részletessége):");
+                        // search_resolution - this variable defines how many point do we need to look for
+                        // search_resolution - ez a változó megadja, hogy mennyiszer kell lefuttatnunk a keresést
+                        egui::Slider::new(
+                            &mut self.search_resolution,
+                            RangeInclusive::new(3_u32, u32::MAX),
+                        )
+                        .ui(ui);
+                    }
+                    else if self.selected_method == Heuristics::SteepestAscentOneNode
                     {
                         ui.label(
                             "Number of not improving generations (nem javuló generációk száma):",
@@ -147,7 +195,7 @@ impl eframe::App for SmallestPolygonCoverApp {
                         self.circumference = vec![];
                         self.started = false;
                         self.points = setup_points(self.n_o_points);
-                        self.polygon = setup_polygon(self.n_o_nodes);
+                        self.polygon = setup_polygon(self.n_o_nodes, self.random_polygon);
                     }
                     if ui.button("Generate points").clicked() {
                         self.circumference = vec![];
@@ -157,7 +205,7 @@ impl eframe::App for SmallestPolygonCoverApp {
                     if ui.button("Generate polygon").clicked() {
                         self.circumference = vec![];
                         self.started = false;
-                        self.polygon = setup_polygon(self.n_o_nodes);
+                        self.polygon = setup_polygon(self.n_o_nodes, self.random_polygon);
                     }
                     ui.separator()
                 });

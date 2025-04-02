@@ -7,7 +7,6 @@ edition = "2021"
 [dependencies]
 egui = "0.31.0"
 eframe = { version = "0.31.0", default-features = false, features = ["accesskit", "android-native-activity", "default_fonts", "glow", "persistence", "wayland", "x11"] }
-log = "0.4"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
@@ -38,3 +37,7 @@ opt-level = 2 # fast and small wasm
 # Optimize all dependencies even in debug builds:
 [profile.dev.package."*"]
 opt-level = 2
+
+# For ignoring false positives
+[package.metadata.cargo-machete]
+ignored = ["getrandom"]

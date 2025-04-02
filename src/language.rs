@@ -4,6 +4,7 @@ enum Locale {
     Slovak,
 }
 
+// TODO: Implement multi-language support for the program!!!
 struct ApplicationLocale {}
 
 struct MenubarLocale {

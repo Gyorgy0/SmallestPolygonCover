@@ -23,11 +23,16 @@ impl Point {
 pub struct Polygon {
     pub k: u8,             // Number of polygon nodes - körbeírandó poligon fokszáma
     pub nodes: Vec<Point>, // Polygon nodes - poligon csúcsai
+    pub circumference: f32,
 }
 
 impl Polygon {
     pub fn new(k: u8, nodes: Vec<Point>) -> Self {
-        Self { k: k, nodes: nodes }
+        Self {
+            k: k,
+            nodes: nodes,
+            circumference: 0_f32,
+        }
     }
 }
 
@@ -52,10 +57,13 @@ pub fn setup_points(n_o_points: u8) -> Vec<Point> {
     points
 }
 
-pub fn setup_polygon(n_o_nodes: u8) -> Polygon {
+pub fn setup_polygon(n_o_nodes: u8, random_polygon: bool) -> Polygon {
     let mut poly_nodes: Vec<Point> = vec![];
     let angle = (2_f32 * PI) / n_o_nodes as f32;
-    let rnd_offset = rng().random_range(0_f32..(2_f32 * PI));
+    let mut rnd_offset = 0_f32;
+    if random_polygon {
+        rnd_offset = rng().random_range(0_f32..(2_f32 * PI));
+    }
     for i in 0..n_o_nodes as usize {
         poly_nodes.push(Point::new(
             (i as f32 * angle + rnd_offset).sin(),
@@ -126,7 +134,7 @@ pub enum Heuristics {
     Stochastic,
     SteepestAscentOneNode,
     SteepestAscentAllNodes,
-    SCTimeLimit,
+    SCITerLimit,
     SCConstant,
     SCFitnessDependent,
 }
@@ -137,7 +145,9 @@ impl fmt::Display for Heuristics {
             Heuristics::Stochastic => write!(f, "Stochastic"),
             Heuristics::SteepestAscentOneNode => write!(f, "Steepest ascent (one node)"),
             Heuristics::SteepestAscentAllNodes => write!(f, "Steepest ascent (all nodes)"),
-            Heuristics::SCTimeLimit => write!(f, "Stochastic + Simulated cooling (time limit)"),
+            Heuristics::SCITerLimit => {
+                write!(f, "Stochastic + Simulated cooling (iteration limit)")
+            }
             Heuristics::SCConstant => write!(f, "Stochastic + Simulated cooling (constant)"),
             Heuristics::SCFitnessDependent => {
                 write!(f, "Stochastic + Simulated cooling (fitness dependent)")
@@ -153,6 +163,7 @@ pub fn execute_function(app: &mut SmallestPolygonCoverApp) -> Polygon {
             &mut app.polygon,
             app.stepsize,
             app.n_o_stop_generations,
+            app.chance_of_bad_step,
             &mut app.stop_generation_counter,
             &mut app.circumference,
             &mut app.started,
@@ -177,7 +188,7 @@ pub fn execute_function(app: &mut SmallestPolygonCoverApp) -> Polygon {
             &mut app.circumference,
             &mut app.started,
         ),
-        Heuristics::SCTimeLimit => simulated_cooling(
+        Heuristics::SCITerLimit => simulated_cooling(
             &app.points,
             &mut app.polygon,
             app.stepsize,
@@ -193,6 +204,7 @@ fn stochastic(
     polygon: &mut Polygon,
     stepsize: f32,
     n_o_stop_generations: u8,
+    chance_of_bad_step: f32,
     stop_generation_counter: &mut u8,
     circumference: &mut Vec<f32>,
     started: &mut bool,
@@ -213,6 +225,7 @@ fn stochastic(
         actual_circumference = caculate_circumference(&polygon);
         if actual_circumference > circumference[circumference.len() - 1]
             || !points_are_in_bounds(points, &polygon)
+            || rnd.random::<f32>() >= chance_of_bad_step
         {
             polygon.nodes[i] = original_point;
         }
