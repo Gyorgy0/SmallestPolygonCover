@@ -21,9 +21,9 @@ impl Point {
 
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct Polygon {
-    pub k: u8,             // Number of polygon nodes - körbeírandó poligon fokszáma
-    pub nodes: Vec<Point>, // Polygon nodes - poligon csúcsai
-    pub circumference: f32,
+    pub k: u8,              // Number of polygon nodes - körbeírandó poligon fokszáma
+    pub nodes: Vec<Point>,  // Polygon nodes - poligon csúcsai
+    pub circumference: f32, // Polygon circumference - poligon kerülete
 }
 
 impl Polygon {
@@ -188,14 +188,40 @@ pub fn execute_function(app: &mut SmallestPolygonCoverApp) -> Polygon {
             &mut app.circumference,
             &mut app.started,
         ),
-        Heuristics::SCITerLimit => simulated_cooling(
+        Heuristics::SCITerLimit => sim_cooling_iter_limit(
             &app.points,
             &mut app.polygon,
             app.stepsize,
+            app.temp_init,
+            app.iter_limit,
+            &mut app.temp,
             &mut app.circumference,
+            &mut app.started,
         ),
-        Heuristics::SCConstant => todo!(),
-        Heuristics::SCFitnessDependent => todo!(),
+        Heuristics::SCConstant => sim_cooling_const(
+            &app.points,
+            &mut app.polygon,
+            app.stepsize,
+            app.temp_init,
+            app.temp_const,
+            app.iter_const,
+            app.n_o_stop_generations,
+            &mut app.stop_generation_counter,
+            &mut app.temp,
+            &mut app.circumference,
+            &mut app.started,
+        ),
+        Heuristics::SCFitnessDependent => sim_cooling_fit_dep(
+            &app.points,
+            &mut app.polygon,
+            app.stepsize,
+            app.temp_init,
+            app.n_o_stop_generations,
+            &mut app.stop_generation_counter,
+            &mut app.temp,
+            &mut app.circumference,
+            &mut app.started,
+        ),
     }
 }
 
@@ -223,9 +249,9 @@ fn stochastic(
         let new_y_diff = rand_degreee.cos() * stepsize;
         polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
         actual_circumference = caculate_circumference(&polygon);
-        if actual_circumference > circumference[circumference.len() - 1]
+        if actual_circumference >= circumference[circumference.len() - 1]
+            && rnd.random::<f32>() >= chance_of_bad_step
             || !points_are_in_bounds(points, &polygon)
-            || rnd.random::<f32>() >= chance_of_bad_step
         {
             polygon.nodes[i] = original_point;
         }
@@ -339,20 +365,168 @@ fn steepest_ascent_all(
     polygon.clone()
 }
 
-fn taboo_search(
+fn sim_cooling_iter_limit(
     points: &[Point],
     polygon: &mut Polygon,
     stepsize: f32,
+    temp_init: f32,
+    iter_limit: usize,
+    temp: &mut Vec<f32>,
     circumference: &mut Vec<f32>,
+    started: &mut bool,
 ) -> Polygon {
+    let mut rnd = rand::rng();
+    let mut actual_circumference = 0_f32;
+    let n_o_nodes = polygon.nodes.len();
+    if circumference.is_empty() {
+        actual_circumference = caculate_circumference(&polygon);
+        circumference.push(actual_circumference);
+        temp.push(temp_init);
+    }
+    let mut new_temp = *temp.last().unwrap() - (temp_init / iter_limit as f32);
+    if new_temp < 0_f32 {
+        new_temp = 0_f32;
+    }
+    for i in 0..n_o_nodes {
+        let original_point = polygon.nodes[i];
+        let rand_degreee = rnd.random_range(0_f32..=(2_f32 * PI));
+        let new_x_diff = rand_degreee.sin() * stepsize;
+        let new_y_diff = rand_degreee.cos() * stepsize;
+        polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
+        actual_circumference = caculate_circumference(&polygon);
+        if actual_circumference >= circumference[circumference.len() - 1]
+            && rnd.random::<f32>() >= new_temp
+            || !points_are_in_bounds(points, &polygon)
+        {
+            polygon.nodes[i] = original_point;
+        }
+        actual_circumference = caculate_circumference(&polygon);
+    }
+    // Stopping condition - megállási feltétel
+    if circumference.len() >= iter_limit as usize {
+        *started = false
+    }
+    circumference.push(actual_circumference);
+    temp.push(new_temp);
     polygon.clone()
 }
 
-fn simulated_cooling(
+fn sim_cooling_const(
     points: &[Point],
     polygon: &mut Polygon,
     stepsize: f32,
+    temp_init: f32,
+    temp_const: f32,
+    iter_const: usize,
+    n_o_stop_generations: u8,
+    stop_generation_counter: &mut u8,
+    temp: &mut Vec<f32>,
     circumference: &mut Vec<f32>,
+    started: &mut bool,
 ) -> Polygon {
+    let mut rnd = rand::rng();
+    let mut actual_circumference = 0_f32;
+    let n_o_nodes = polygon.nodes.len();
+    if circumference.is_empty() {
+        actual_circumference = caculate_circumference(&polygon);
+        circumference.push(actual_circumference);
+        temp.push(temp_init);
+    }
+    let mut new_temp = *temp.last().unwrap() - (temp_const / iter_const as f32);
+    if new_temp < 0_f32 {
+        new_temp = 0_f32;
+    }
+    for i in 0..n_o_nodes {
+        let original_point = polygon.nodes[i];
+        let rand_degreee = rnd.random_range(0_f32..=(2_f32 * PI));
+        let new_x_diff = rand_degreee.sin() * stepsize;
+        let new_y_diff = rand_degreee.cos() * stepsize;
+        polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
+        actual_circumference = caculate_circumference(&polygon);
+        if actual_circumference >= circumference[circumference.len() - 1]
+            && rnd.random::<f32>() >= new_temp
+            || !points_are_in_bounds(points, &polygon)
+        {
+            polygon.nodes[i] = original_point;
+        }
+        actual_circumference = caculate_circumference(&polygon);
+    }
+    // Stopping condition - megállási feltétel
+    if actual_circumference == *circumference.last().unwrap_or(&0_f32) {
+        *stop_generation_counter += 1;
+    } else if actual_circumference != *circumference.last().unwrap_or(&0_f32) {
+        *stop_generation_counter = 0;
+    }
+    if *stop_generation_counter == n_o_stop_generations {
+        *stop_generation_counter = 0;
+        *started = false;
+    }
+    circumference.push(actual_circumference);
+    temp.push(new_temp);
+    polygon.clone()
+}
+
+fn sim_cooling_fit_dep(
+    points: &[Point],
+    polygon: &mut Polygon,
+    stepsize: f32,
+    temp_init: f32,
+    n_o_stop_generations: u8,
+    stop_generation_counter: &mut u8,
+    temp: &mut Vec<f32>,
+    circumference: &mut Vec<f32>,
+    started: &mut bool,
+) -> Polygon {
+    let mut rnd = rand::rng();
+    let mut actual_circumference = 0_f32;
+    let n_o_nodes = polygon.nodes.len();
+    if circumference.is_empty() {
+        actual_circumference = caculate_circumference(&polygon);
+        circumference.push(actual_circumference);
+        temp.push(temp_init);
+    }
+    let mut new_temp = *temp.last().unwrap();
+    if circumference.len() > 2 {
+        new_temp -= *temp.last().unwrap()
+            * (1_f32
+                - (circumference
+                    .get(circumference.len() - 1)
+                    .unwrap_or(&1_f32)
+                    .min(*circumference.get(circumference.len() - 2).unwrap_or(&1_f32))
+                    / circumference
+                        .get(circumference.len() - 2)
+                        .unwrap_or(&1_f32)
+                        .max(*circumference.get(circumference.len() - 1).unwrap_or(&1_f32))));
+    }
+    if new_temp < 0_f32 {
+        new_temp = 0_f32;
+    }
+    for i in 0..n_o_nodes {
+        let original_point = polygon.nodes[i];
+        let rand_degreee = rnd.random_range(0_f32..=(2_f32 * PI));
+        let new_x_diff = rand_degreee.sin() * stepsize;
+        let new_y_diff = rand_degreee.cos() * stepsize;
+        polygon.nodes[i] = Point::new(original_point.x - new_x_diff, original_point.y - new_y_diff);
+        actual_circumference = caculate_circumference(&polygon);
+        if actual_circumference > circumference[circumference.len() - 1]
+            && rnd.random::<f32>() >= new_temp
+            || !points_are_in_bounds(points, &polygon)
+        {
+            polygon.nodes[i] = original_point;
+        }
+        actual_circumference = caculate_circumference(&polygon);
+    }
+    // Stopping condition - megállási feltétel
+    if actual_circumference == *circumference.last().unwrap_or(&0_f32) {
+        *stop_generation_counter += 1;
+    } else if actual_circumference != *circumference.last().unwrap_or(&0_f32) {
+        *stop_generation_counter = 0;
+    }
+    if *stop_generation_counter == n_o_stop_generations {
+        *stop_generation_counter = 0;
+        *started = false;
+    }
+    circumference.push(actual_circumference);
+    temp.push(new_temp);
     polygon.clone()
 }
