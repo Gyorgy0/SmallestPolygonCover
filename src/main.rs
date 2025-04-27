@@ -78,6 +78,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Log to android output
 
     use smallest_polygon_cover::SmallestPolygonCoverApp;
+
     android_logger::init_once(
         android_logger::Config::default().with_max_level(log::LevelFilter::Info),
     );
@@ -87,7 +88,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
         ..Default::default()
     };
     eframe::run_native(
-        "My egui App",
+        "Smallest polygon cover",
         options,
         Box::new(|cc| Ok(Box::new(SmallestPolygonCoverApp::new(cc)))),
     )

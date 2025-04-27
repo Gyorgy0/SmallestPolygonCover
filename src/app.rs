@@ -1,20 +1,37 @@
-use egui::{self, CentralPanel, Color32, Pos2, Stroke, Ui, Visuals, Widget};
-use egui_plot::{Legend, Line, PlotPoints};
-use std::{ops::RangeInclusive, u32, usize};
+use egui::{self, CentralPanel, Color32, Pos2, RichText, Stroke, Ui, Visuals, Widget};
+use egui_plot::{Line, PlotPoints};
+use std::{ops::RangeInclusive, u32, u8, usize};
 use strum::IntoEnumIterator;
 
-use crate::simulation::{
-    execute_function, setup_points, setup_polygon, Heuristics, Point, Polygon,
-};
+use crate::simulation::{execute_function, setup_points, setup_polygon, Heuristics, Polygon};
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+fn android_main(app: winit::platform::android::activity::AndroidApp) {
+    // Log to android output
+    android_logger::init_once(
+        android_logger::Config::default().with_max_level(log::LevelFilter::Info),
+    );
+
+    let options = eframe::NativeOptions {
+        android_app: Some(app),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Smallest polygon cover",
+        options,
+        Box::new(|cc| Ok(Box::new(SmallestPolygonCoverApp::new(cc)))),
+    )
+    .unwrap()
+}
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct SmallestPolygonCoverApp {
     #[serde(skip)]
-    pub points: Vec<Point>,
+    pub points: Vec<Pos2>,
     #[serde(skip)]
-    pub polygon: Polygon,
     pub selected_method: Heuristics,
     pub n_o_points: u8,
     pub n_o_nodes: u8,
@@ -25,19 +42,22 @@ pub struct SmallestPolygonCoverApp {
     pub iter_const: usize,
     pub temp_const: f32,
     pub temp_init: f32,
+    pub search_resolution: u32,
+    #[serde(skip)]
+    pub visited_node_points: Vec<Pos2>,
+    #[serde(skip)]
+    pub viewed_polygon: Polygon,
     #[serde(skip)]
     pub stop_generation_counter: u8,
-    pub search_resolution: u32,
     #[serde(skip)]
     pub searches: Vec<Polygon>,
     #[serde(skip)]
-    pub n_o_searches: u32,
+    pub n_o_searches: u8,
     #[serde(skip)]
-    pub search_counter: u32,
+    pub search_done: bool,
     #[serde(skip)]
-    pub temp: Vec<f32>,
+    pub search_counter: u8,
     #[serde(skip)]
-    pub circumference: Vec<f32>,
     pub stepsize: f32,
     #[serde(skip)]
     pub started: bool,
@@ -47,7 +67,6 @@ impl Default for SmallestPolygonCoverApp {
     fn default() -> Self {
         Self {
             points: vec![],
-            polygon: Polygon::default(),
             selected_method: Heuristics::SteepestAscentOneNode,
             n_o_points: 0_u8,
             n_o_nodes: 3_u8,
@@ -58,13 +77,14 @@ impl Default for SmallestPolygonCoverApp {
             iter_const: 0_usize,
             temp_const: 0_f32,
             temp_init: 0_f32,
-            stop_generation_counter: 0_u8,
             search_resolution: 100_u32,
-            searches: vec![],
-            n_o_searches: 1_u32,
-            search_counter: 0_u32,
-            temp: vec![],
-            circumference: vec![],
+            visited_node_points: vec![],
+            viewed_polygon: Polygon::default(),
+            stop_generation_counter: 0_u8,
+            searches: vec![Polygon::default()],
+            n_o_searches: 1_u8,
+            search_done: false,
+            search_counter: 1_u8,
             stepsize: 0.01_f32,
             started: false,
         }
@@ -95,7 +115,7 @@ impl eframe::App for SmallestPolygonCoverApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        CentralPanel::default().show(&ctx, |ui| {
+        CentralPanel::default().show(ctx, |ui| {
             egui::Window::new("Options (beállítások)").show(ctx, |ui| {
                 let mut options_ui = egui::UiBuilder::new();
                 if self.started {
@@ -114,7 +134,7 @@ impl eframe::App for SmallestPolygonCoverApp {
                         "Random polygon initialization (véletlenszerű poligon inicializálás)",
                     ));
                     egui::ComboBox::from_label("")
-                        .selected_text(format!("{}", self.selected_method.to_string()))
+                        .selected_text(format!("{}", self.selected_method))
                         .show_ui(ui, |ui| {
                             Heuristics::iter().for_each(|method| {
                                 ui.selectable_value(
@@ -230,24 +250,42 @@ impl eframe::App for SmallestPolygonCoverApp {
                             .ui(ui);
                     }
                     ui.separator();
+                    ui.label(RichText::new(
+                        "Tabbo search options (tabu keresés beállításai): ",
+                    ));
+                    ui.separator();
+                    ui.label("Number of searches (keresések száma):");
+                    // n_o_searches - this variable defines how many times do we need to start a new search
+                    // n_o_searches - ez a változó megadja, hogy mennyi keresést kell indítanunk
+                    egui::Slider::new(&mut self.n_o_searches, RangeInclusive::new(1_u8, u8::MAX))
+                        .ui(ui);
+                    ui.separator();
                     if ui.button("Reset").clicked() {
-                        self.circumference = vec![];
-                        self.temp = vec![];
+                        self.searches = vec![setup_polygon(
+                            self.n_o_nodes,
+                            self.random_polygon,
+                            self.temp_init,
+                        )];
                         self.started = false;
-                        self.points = setup_points(self.n_o_points);
-                        self.polygon = setup_polygon(self.n_o_nodes, self.random_polygon);
-                    }
-                    if ui.button("Generate points").clicked() {
-                        self.circumference = vec![];
-                        self.temp = vec![];
-                        self.started = false;
+                        self.search_counter = 1;
                         self.points = setup_points(self.n_o_points);
                     }
-                    if ui.button("Generate polygon").clicked() {
-                        self.circumference = vec![];
-                        self.temp = vec![];
+                    if ui.button("Generate new points").clicked() {
+                        self.searches
+                            .last_mut()
+                            .unwrap()
+                            .circumference_history
+                            .clear();
                         self.started = false;
-                        self.polygon = setup_polygon(self.n_o_nodes, self.random_polygon);
+                        self.points = setup_points(self.n_o_points);
+                    }
+                    if ui.button("Generate new polygon").clicked() {
+                        self.searches = vec![setup_polygon(
+                            self.n_o_nodes,
+                            self.random_polygon,
+                            self.temp_init,
+                        )];
+                        self.started = false;
                     }
                     ui.separator()
                 });
@@ -255,11 +293,35 @@ impl eframe::App for SmallestPolygonCoverApp {
                     if ui.button("Start").clicked() {
                         self.started = true;
                     }
-                } else if self.started {
-                    self.polygon = execute_function(self);
+                } else if self.started && !self.search_done {
+                    let last_index = self.searches.len() - 1;
+                    self.searches[last_index] = execute_function(self);
                     if ui.button("Stop").clicked() {
                         self.started = false;
                     }
+                } else if self.search_done
+                    && self.started
+                    && self.search_counter < self.n_o_searches
+                {
+                    self.searches.push(setup_polygon(
+                        self.n_o_nodes,
+                        self.random_polygon,
+                        self.temp_init,
+                    ));
+                    self.search_counter += 1;
+                    self.search_done = false;
+                    self.started =true;
+                }
+                else {
+                    egui::Window::new("Search results (Keresések eredményei):").scroll([false, true]).show(ctx, |ui| {
+                        for i in 0..self.searches.len() {
+                            if ui.button(format!("{}. search (keresés)", i+1)).clicked() {
+                                self.viewed_polygon = self.searches[i].clone();
+                            }
+                        }
+                    });
+                    ui.label("The searches have been performed, you need to clear everything!!!");
+                    ui.label("A keresések le lettek futtatva, ki kell törölnöd az eddig beállított adatokat!!!");
                 }
                 ui.separator();
                 if ui.button("Clear everything").clicked() {
@@ -270,12 +332,14 @@ impl eframe::App for SmallestPolygonCoverApp {
                 ui.label("Author: Juraj Lukovics");
                 ui.label(egui::special_emojis::GITHUB.to_string() + " GitHub: ");
                 ui.add(egui::Hyperlink::new("https://github.com/Gyorgy0"));
-                egui_plot::Plot::new("Plot")
+                egui_plot::Plot::new("Plot".to_string())
                     .allow_drag(true)
-                    .legend(Legend::default())
                     .show(ui, |plot_ui| {
-                        let points = PlotPoints::from_ys_f32(&self.circumference);
-                        plot_ui.line(Line::new(points));
+                        for i in 0..self.searches.len() {
+                            let points =
+                                PlotPoints::from_ys_f32(&self.searches[i].circumference_history);
+                            plot_ui.line(Line::new(format!("{}. search (keresés)", i + 1), points));
+                        }
                     });
             });
             if self.selected_method == Heuristics::SCConstant
@@ -283,13 +347,17 @@ impl eframe::App for SmallestPolygonCoverApp {
                 || self.selected_method == Heuristics::SCFitnessDependent
             {
                 egui::Window::new("Temperature (hőmérséklet))").show(ctx, |ui| {
-                    egui_plot::Plot::new("Plot")
-                        .allow_drag(true)
-                        .legend(Legend::default())
-                        .show(ui, |plot_ui| {
-                            let points = PlotPoints::from_ys_f32(&self.temp);
-                            plot_ui.line(Line::new(points).color(Color32::BLUE));
-                        });
+                        egui_plot::Plot::new("Plot")
+                            .allow_drag(true)
+                            .show(ui, |plot_ui| {
+                                for i in 0..self.searches.len() {
+                                let points =
+                                    PlotPoints::from_ys_f32(&self.searches[i].temperature_history);
+                                plot_ui.line(
+                                    Line::new(format!("{}. search (keresés)", i + 1), points)
+                                        .color(Color32::BLUE),
+                                );}
+                            });
                 });
             }
             display_contents(self, ctx, ui);
@@ -298,7 +366,7 @@ impl eframe::App for SmallestPolygonCoverApp {
     }
 }
 
-fn display_contents(app: &mut SmallestPolygonCoverApp, ctx: &egui::Context, ui: &mut Ui) {
+fn display_contents(app: &SmallestPolygonCoverApp, ctx: &egui::Context, ui: &mut Ui) {
     // Center of the window - Az ablak közepe
     let center: Pos2 = Pos2::new(
         ctx.screen_rect().width() / 2.0,
@@ -317,14 +385,20 @@ fn display_contents(app: &mut SmallestPolygonCoverApp, ctx: &egui::Context, ui: 
     );
     // Displaying the polygon - Poligon megjelenítése
     let mut points: Vec<Pos2> = vec![];
-    for i in 0..app.polygon.nodes.len() {
+    let mut actual_polygon = &Polygon::default();
+    if app.search_counter > app.n_o_searches {
+        actual_polygon = &app.viewed_polygon;
+    } else {
+        actual_polygon = app.searches.last().unwrap();
+    }
+    for i in 0..actual_polygon.nodes.len() {
         points.push(Pos2::new(
-            center.x + (radius * app.polygon.nodes[i].x),
-            center.y + (radius * app.polygon.nodes[i].y),
+            center.x + (radius * actual_polygon.nodes[i].x),
+            center.y + (radius * actual_polygon.nodes[i].y),
         ));
         points.push(Pos2::new(
-            center.x + (radius * app.polygon.nodes[(i + 1) % app.polygon.nodes.len()].x),
-            center.y + (radius * app.polygon.nodes[(i + 1) % app.polygon.nodes.len()].y),
+            center.x + (radius * actual_polygon.nodes[(i + 1) % actual_polygon.nodes.len()].x),
+            center.y + (radius * actual_polygon.nodes[(i + 1) % actual_polygon.nodes.len()].y),
         ));
     }
     ui.painter().line(points, Stroke::new(5.0, Color32::RED));
