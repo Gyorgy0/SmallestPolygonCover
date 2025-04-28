@@ -312,7 +312,8 @@ impl eframe::App for SmallestPolygonCoverApp {
                     self.search_done = false;
                     self.started =true;
                 }
-                else {
+                else if self.search_done
+                && self.search_counter == self.n_o_searches {
                     egui::Window::new("Search results (Keresések eredményei):").scroll([false, true]).show(ctx, |ui| {
                         for i in 0..self.searches.len() {
                             if ui.button(format!("{}. search (keresés)", i+1)).clicked() {
@@ -386,7 +387,7 @@ fn display_contents(app: &SmallestPolygonCoverApp, ctx: &egui::Context, ui: &mut
     // Displaying the polygon - Poligon megjelenítése
     let mut points: Vec<Pos2> = vec![];
     let mut actual_polygon = &Polygon::default();
-    if app.search_counter > app.n_o_searches {
+    if app.search_counter == app.n_o_searches && app.search_done {
         actual_polygon = &app.viewed_polygon;
     } else {
         actual_polygon = app.searches.last().unwrap();
